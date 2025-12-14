@@ -1,0 +1,12 @@
+# Folders to ignore
+__pycache__/
+.vscode/
+
+# File extensions to ignore
+*.yml
+
+# Environments
+.env
+.venv
+env/
+venv/
