@@ -1,0 +1,16 @@
+# Folders to ignore
+__pycache__/
+.venv/
+.vscode/
+**/browser_data
+**/logs/
+
+# File extensions to ignore
+*.bak
+*.code-workspace
+*.log
+*.env
+*.yml
+
+# Specific files to ignore
+agent-memory.json
