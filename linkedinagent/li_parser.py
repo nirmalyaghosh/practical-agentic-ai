@@ -226,24 +226,45 @@ async def _extract_post_url(container) -> str | None:
 
     # Extract the URL of the post (multiple possible selectors)
     post_url = "Unknown"
-    url_selectors = [
-        'a[data-test-id="main-feed-activity-card__post-link"]',
-        ".feed-shared-control-menu__trigger",
-        'a[href*="/feed/update/"]',
-        'a[href*="/posts/"]'
-    ]
     try:
-        for selector in url_selectors:
-            url_el = await container.query_selector(selector)
-            if url_el is None:
-                continue
+        # Strategy 1: Try to extract href from link elements
+        url_selectors = [
+            "time ~ a",
+            ".feed-shared-actor__sub-description a",
+            ".update-components-actor__sub-description a",
+            'a.app-aware-link[href*="/feed/update/"]',
+            'a[href*="/posts/"]',
+        ]
 
-            post_url = await url_el.get_attribute("href")
-            if post_url:
-                # Make absolute URL if relative
-                if post_url.startswith('/'):
-                    post_url = f"https://www.linkedin.com{post_url}"
-                break
+        post_url = await _try_selectors_for_attribute(
+            container=container,
+            selectors=url_selectors,
+            attribute="href"
+        )
+
+        # Filter to ensure it is a post URL
+        if post_url and not ("/feed/update/" in post_url
+                             or "/posts/" in post_url):
+            post_url = None
+
+        # Strategy 2: Construct from data attributes
+        if not post_url:
+            data_id = await container.get_attribute("data-id")
+            if not data_id:
+                data_id = await container.get_attribute("data-urn")
+
+            if data_id and "urn:li:activity:" in data_id:
+                post_url = f"/feed/update/{data_id}/"
+
+        # Make absolute URL
+        if post_url:
+            if post_url.startswith('/'):
+                post_url = f"https://www.linkedin.com{post_url}"
+            elif not post_url.startswith('http'):
+                post_url = f"https://www.linkedin.com/{post_url}"
+
+            return post_url
+
     except Exception as e:
         logger.debug(f"Failed to extract post URL: {e}")
 
@@ -344,4 +365,27 @@ async def _try_selectors(container, selectors: List[str]) -> str | None:
 
     if last_error:
         logger.debug(f"All selectors failed, last error: {last_error}")
+    return None
+
+
+async def _try_selectors_for_attribute(
+        container,
+        selectors: List[str],
+        attribute: str) -> str | None:
+    """
+    Helper function to try multiple selectors and extract an attribute value.
+    Similar to `_try_selectors` but for attributes instead of text.
+    """
+    for selector in selectors:
+        try:
+            el = await container.query_selector(selector)
+            if el:
+                value = await el.get_attribute(attribute)
+                if value:
+                    logger.debug("Found {} using selector: {}"
+                                 .format(attribute, selector))
+                    return value
+        except Exception as e:
+            logger.debug(f"Selector '{selector}' failed: {e}")
+
     return None
