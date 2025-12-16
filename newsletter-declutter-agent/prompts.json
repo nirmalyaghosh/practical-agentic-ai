@@ -1,0 +1,15 @@
+{
+  "newsletter_declutter_agent": {
+    "description": "Analyze email newsletters and provide unsubscribe recommendations.",
+    "lines": [
+      "Analyze my email newsletters and help me decide which to unsubscribe from.",
+      "Follow these steps:",
+      "1. Scan the last 30 days of emails to identify newsletters",
+      "2. Analyze engagement rates for the newsletters you find",
+      "3. Extract unsubscribe links for newsletters with low engagement (open rate < 30%)",
+      "4. Provide a comprehensive summary with actionable recommendations",
+      "",
+      "Be thorough and provide specific details about each newsletter."
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+# Folders to ignore
+__pycache__/
+.venv/
+.vscode/
+**/logs/
+
+# File extensions to ignore
+*.bak
+*.code-workspace
+*.log
+*.env
+*.yml
+
+# Specific files to ignore
+client_secret_*.json
+credentials.json
+token.pickle
