@@ -1,0 +1,12 @@
+# Gmail API Dependencies
+google-auth-oauthlib == 1.2.3
+google-auth-httplib2 == 0.3.0
+google-api-python-client == 2.108.0
+
+# AI Provider SDKs
+anthropic == 0.75.0
+openai >= 1.0.0
+
+# Others
+concurrent-log-handler == 0.9.28
+python-dotenv >= 1.0.0

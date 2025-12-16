@@ -1,0 +1,56 @@
+[
+    {
+        "type": "function",
+        "function": {
+            "name": "scan_newsletters",
+            "description": "Scan Gmail for newsletter subscriptions over a specified time period. Identifies emails with List-Unsubscribe headers.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "days_back": {
+                        "type": "integer",
+                        "description": "How many days to look back for analysis",
+                        "default": 30
+                    }
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "analyze_engagement",
+            "description": "Analyze open/read rates for specific newsletter senders by checking read/unread status of their emails.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "newsletter_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of newsletter sender email addresses to analyze"
+                    }
+                },
+                "required": ["newsletter_ids"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "extract_unsubscribe_links",
+            "description": "Extract unsubscribe links from newsletters using the List-Unsubscribe header or email body.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "sender_emails": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Newsletter sender email addresses to extract unsubscribe links from"
+                    }
+                },
+                "required": ["sender_emails"]
+            }
+        }
+    }
+]
