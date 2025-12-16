@@ -39,7 +39,7 @@ async def extract_post(container) -> Dict[str, Any]:
 
         post_data = {
             "published_date": published_date,
-            "author": author.strip() if author else None,
+            "author": author,
             "text": text.strip() if text else None,
             "url": post_url.strip() if post_url else None,
             **engagement_counts,
@@ -73,10 +73,13 @@ async def _extract_post_author(container) -> str | None:
         author = await _try_selectors(
             container=container,
             selectors=author_selectors)
+        if author and "\n" in author:
+            author = author.split("\n")[0].strip()
 
     except Exception as e:
         logger.debug(f"Failed to extract author: {e}")
 
+    author = author.strip() if author else None
     return author
 
 
