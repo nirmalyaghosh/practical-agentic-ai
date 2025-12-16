@@ -9,6 +9,9 @@ from playwright.async_api import (
     async_playwright,
     Page,
 )
+
+from li_parser import extract_post
+
 logger = logging.getLogger(__name__)
 
 # Store browser data in a persistent directory
@@ -87,67 +90,24 @@ async def extract_posts(
 
         for idx, container in enumerate(containers[:limit]):
             try:
-                # Try multiple author selectors
-                author_el = None
-                author_selectors = [
-                    ".update-components-actor__name",
-                    ".feed-shared-actor__name",
-                    ".update-components-actor__title",
-                    '[data-test-id="main-feed-activity-card__entity-lockup"] '
-                    'span[aria-hidden="true"]',
-                    '.app-aware-link span[aria-hidden="true"]'
-                ]
-
-                for selector in author_selectors:
-                    author_el = await container.query_selector(selector)
-                    if author_el:
-                        break
-
-                # Try multiple text selectors
-                text_el = None
-                text_selectors = [
-                    '.feed-shared-update-v2__description',
-                    '.feed-shared-text',
-                    '.break-words',
-                    '[data-test-id="main-feed-activity-card__commentary"]',
-                    '.feed-shared-inline-show-more-text'
-                ]
-
-                for selector in text_selectors:
-                    text_el = await container.query_selector(selector)
-                    if text_el:
-                        break
-
-                if author_el and text_el:
-                    author_text = (await author_el.inner_text()).strip()
-                    post_text = (await text_el.inner_text()).strip()
-
-                    # Skip empty posts
-                    if not post_text:
-                        logger.debug(f"  Post {idx + 1}: Skipped (empty text)")
-                        continue
-
-                    posts.append({
-                        "author": author_text,
-                        "text": post_text,
-                    })
+                post = await extract_post(container=container)
+                if post is None:
                     logger.debug(f"  Post {idx + 1}: "
-                                 f"Extracted from {author_text[:30]}...")
-                else:
-                    logger.debug(f"  Post {idx + 1}: "
-                                 f"Skipped (author={author_el is not None}, "
-                                 f"text={text_el is not None})")
+                                 f"Skipped because empty post data")
+                    continue
+
+                posts.append(post)
 
             except Exception as e:
                 logger.debug(f"  Post {idx + 1}: Error - {e}")
                 continue
 
         logger.info(f"Successfully extracted {len(posts)} posts")
-        return posts
 
     except Exception as e:
         logger.error(f"Failed to extract posts: {e}")
-        return []
+
+    return posts
 
 
 async def get_authenticated_context(playwright):
