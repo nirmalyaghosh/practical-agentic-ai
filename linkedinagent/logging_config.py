@@ -33,3 +33,8 @@ logging.basicConfig(
     level=getattr(logging, LOG_LEVEL, logging.INFO),
     handlers=[stream_handler, file_handler])
 logger = logging.getLogger(__name__)
+
+# Suppress DEBUG messages of specific noisy loggers
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("openai").setLevel(logging.INFO)
