@@ -76,10 +76,22 @@ class AgenticLinkedInAgent:
 
                 # Log result
                 is_interesting_str = "YES" if result.is_interesting else "NO"
-                logger.info(f"📄 Post #{post_num}: {post['author'][:30]}...")
-                logger.info(f"   Category: {result.category}")
-                logger.info(f"   Interesting: {is_interesting_str}")
-                logger.info(f"   Insight: {result.key_insight[:80]}...")
+                author = post["author"]
+                text = post.get("text", "").strip()
+                url = post.get("url", "N/A")
+                post_info_lines = []  # Capture information of LinkedIn post
+                post_info_lines.append(f"LinkedIn Post #{post_num}")
+                post_info_lines.append(f"   URL: {url}")
+                post_info_lines.append(f"   Author: {author}")
+                post_info_lines.append(f"   Category: {result.category}")
+                post_info_lines.append(f"   Interesting: {is_interesting_str}")
+                post_info_lines.append(f"   Insight: {result.key_insight}")
+                text_for_snipping = text.replace("\n", " ")
+                snipped_text = (text_for_snipping[:300] + "..."
+                                if len(text_for_snipping) > 300
+                                else text_for_snipping)
+                post_info_lines.append(f"   Text: {snipped_text}")
+                logger.info("\n".join(post_info_lines))
 
                 # Save if interesting
                 if result.is_interesting:
@@ -153,31 +165,45 @@ class AgenticLinkedInAgent:
             return 0.0
 
     async def generate_summary(self):
-        """Generate and log summary of agent run"""
-        logger.info("\n" + "=" * 80)
-        logger.info("📋 AGENT SUMMARY")
-        logger.info("=" * 80)
+        """
+        Helper function used to generate and log summary of agent run
+        """
+        lines = []  # Capture the summary lines
+        lines.append("\n" + "=" * 80)
+        lines.append("AGENT SUMMARY")
+        lines.append("=" * 80)
 
-        logger.info(f"🎯 Goal: {self.state.goal}")
-        logger.info(f"📊 Posts analyzed: {len(self.state.action_history)}")
+        lines.append(f"Goal: {self.state.goal}")
+        lines.append(f"Posts analyzed: {len(self.state.action_history)}")
         n = len(self.interesting_posts)
-        logger.info(f"✨ Interesting posts found: {n}")
+        lines.append(f"Interesting posts found: {n}")
 
+        # Interesting posts
         if self.interesting_posts:
-            logger.info("\n🌟 INTERESTING POSTS:")
+            lines.append("")  # Blank line
+            lines.append("INTERESTING POSTS:")
             for i, post in enumerate(self.interesting_posts, 1):
                 analysis = post["analysis"]
-                logger.info(f"\n{i}. {post['author']}")
-                logger.info(f"   📌 {analysis['key_insight']}")
-                logger.info(f"   🏷️  Category: {analysis['category']}")
+                author = post["author"]
+                url = post.get("url", "N/A")
+                key_insight = analysis["key_insight"]
+                category = analysis["category"]
+                lines.append("")  # Blank line
+                lines.append(f"LinkedIn Post #{i} URL: {url} By {author}")
+                lines.append(f"   Category: {category}")
+                lines.append(f"Key insight: {key_insight}")
+
         else:
-            logger.info("\n😴 No particularly interesting posts found today")
+            lines.append("No particularly interesting posts found today")
 
-        logger.info("\n📈 Category breakdown:")
+        # Category breakdown
+        lines.append("")  # Blank line
+        lines.append("Category breakdown:")
         for cat, count in self.state.categories_seen.items():
-            logger.info(f"   {cat}: {count}")
+            lines.append(f"   {cat}: {count}")
 
-        logger.info("\n" + "=" * 80)
+        lines.append("\n" + "=" * 80)
+        logger.info("\n".join(lines))
 
     def _init_agents(self):
         """
@@ -220,6 +246,7 @@ class AgenticLinkedInAgent:
             "Respond ONLY with valid JSON matching: "
             '{"category": "technical"|"celebration"|"promotional"|"other", '
             '"is_interesting": true|false, "key_insight": "string", '
+            '"text": "string",'
             '"confidence": "high"|"medium"|"low"}'
         )
 
@@ -313,7 +340,7 @@ class AgenticLinkedInAgent:
 
             if result:
                 logger.info(f"Next action: {result.action}")
-                logger.info(f"        Why: {result.reasoning[:60]}...")
+                logger.info(f"        Why: {result.reasoning}\n")
 
                 # Record decision in history
                 self.state.action_history.append({
