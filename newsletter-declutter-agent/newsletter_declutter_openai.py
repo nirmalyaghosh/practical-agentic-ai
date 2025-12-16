@@ -170,7 +170,7 @@ def run_newsletter_agent():
                 logger.info("ANALYSIS COMPLETE")
                 logger.info("="*60)
                 logger.info("")
-                print(final_text)
+                logger.info(final_text)
                 logger.info("")
                 logger.info("="*60)
 
