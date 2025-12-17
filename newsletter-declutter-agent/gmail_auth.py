@@ -5,8 +5,10 @@ Handles OAuth flow and token management for Gmail API access
 
 import os
 import pickle
+import time
 
 from typing import Optional
+
 from google.auth.exceptions import RefreshError
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import (
@@ -49,6 +51,12 @@ class GmailAuthenticator:
         self.credentials_file = credentials_file
         self.token_file = token_file
         self.creds: Optional[Credentials] = None
+        self.error_terms = [
+            "network",
+            "timeout",
+            "connection",
+            "unreachable"
+        ]
 
     def authenticate(self) -> Credentials:
         """
@@ -95,20 +103,66 @@ class GmailAuthenticator:
         if not self.creds or not self.creds.valid:
             if self.creds and self.creds.expired and self.creds.refresh_token:
                 logger.info("Refreshing expired token...")
-                try:
-                    self.creds.refresh(Request())
-                    logger.info("Token refreshed successfully")
-                except RefreshError as e:
-                    logger.warning("Token refresh failed "
-                                   f"(refresh token expired): {e}")
-                    logger.info("Starting new OAuth flow...")
+
+                # Try refresh token, with retry on network error
+                refresh_succeeded = False
+                for attempt in range(2):  # Try twice
+                    try:
+                        self.creds.refresh(Request())
+                        logger.info("Token refreshed successfully")
+                        refresh_succeeded = True
+                        break
+
+                    except RefreshError as e:
+                        # Refresh expired token
+                        # This is NOT retryable - need new OAuth flow
+                        logger.warning(
+                            f"Refresh token expired or revoked: {e}\n"
+                            "This happens after long period of inactivity, "
+                            "or if user revoked access."
+                        )
+                        logger.info("Starting new OAuth flow...")
+                        self.creds = self._run_oauth_flow()
+                        refresh_succeeded = True
+                        break
+
+                    except Exception as e:
+                        # Distinguish network vs other errors
+                        error_msg = str(e).lower()
+                        is_network_error =\
+                            any(term in error_msg for term in self.error_terms)
+
+                        if is_network_error and attempt == 0:
+                            # Network error during token refresh - retry once
+                            logger.warning(
+                                "Network error during token refresh "
+                                f"(attempt {attempt + 1}/2): {e}"
+                            )
+                            # Brief pause before retry
+                            time.sleep(2)
+                            # Then
+                            continue
+                        else:
+                            # Either not network error, or retry failed
+                            error_type = "Network (retried)" \
+                                if is_network_error \
+                                else "Authentication/Other"
+                            logger.error(
+                                f"Token refresh failed: {e}\n"
+                                f"Error type: {error_type}",
+                                exc_info=True
+                            )
+                            logger.info("Starting new OAuth flow...")
+                            self.creds = self._run_oauth_flow()
+                            refresh_succeeded = True
+
+                            break
+
+                # If still unsuccesful
+                if not refresh_succeeded:
+                    logger.error("Token refresh failed after retries")
                     self.creds = self._run_oauth_flow()
-                except Exception as e:
-                    # Unexpected error
-                    logger.error(f"Unexpected error during token refresh: {e}",
-                                 exc_info=True)
-                    logger.info("Starting new OAuth flow...")
-                    self.creds = self._run_oauth_flow()
+
             else:
                 logger.info("No valid credentials found. "
                             "Starting OAuth flow...")
