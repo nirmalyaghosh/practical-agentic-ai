@@ -1,3 +1,4 @@
+import os
 import re
 
 from typing import (
@@ -33,6 +34,8 @@ def analyze_engagement(service, newsletter_ids: List[str]) -> Dict:
     logger.info(f"Analyzing engagement for {n} newsletters...")
     engagement = {}
 
+    max_results = int(os.environ.get("MAX_RESULTS_ANALYZE", "50"))
+    min_open_rate = int(os.environ.get("MIN_OPEN_RATE", "30"))
     for newsletter_id in newsletter_ids:
         try:
             # Search for emails from this sender
@@ -41,7 +44,7 @@ def analyze_engagement(service, newsletter_ids: List[str]) -> Dict:
                 func=service.users().messages().list(
                     userId="me",
                     q=query,
-                    maxResults=100
+                    maxResults=max_results
                 ).execute,
                 max_attempts=3
             )
@@ -70,7 +73,7 @@ def analyze_engagement(service, newsletter_ids: List[str]) -> Dict:
                 "read_count": read_count,
                 "unread_count": total - read_count,
                 "open_rate": round(open_rate, 1),
-                "recommendation": "keep" if open_rate > 30 else
+                "recommendation": "keep" if open_rate > min_open_rate else
                 "consider_unsubscribe"
             }
 
@@ -183,10 +186,11 @@ def scan_newsletters(service, days_back: int = 90) -> Dict:
     newsletters = {}
 
     try:
+        max_results = int(os.environ.get("MAX_RESULTS_SCAN", "50"))
         results = service.users().messages().list(
             userId="me",
             q=query,
-            maxResults=500
+            maxResults=max_results
         ).execute()
 
         messages = results.get("messages", [])
