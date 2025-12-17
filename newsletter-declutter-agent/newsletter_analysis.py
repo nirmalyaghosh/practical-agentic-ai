@@ -170,7 +170,7 @@ def extract_unsubscribe_links(service, sender_emails: List[str]) -> Dict:
     }
 
 
-def scan_newsletters(service, days_back: int = 90) -> Dict:
+def scan_newsletters(service, days_back: int = -1) -> Dict:
     """
     Scan Gmail for newsletter subscriptions.
 
@@ -181,6 +181,10 @@ def scan_newsletters(service, days_back: int = 90) -> Dict:
     Returns:
         Dictionary containing newsletter scan results
     """
+
+    if days_back < 1:
+        days_back = int(os.environ.get("MAX_LOOKBACK_DAYS", "90"))
+
     logger.info(f"Scanning newsletters from the last {days_back} days...")
     query = f"newer_than:{days_back}d"
     newsletters = {}

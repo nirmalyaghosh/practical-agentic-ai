@@ -9,8 +9,7 @@
                 "properties": {
                     "days_back": {
                         "type": "integer",
-                        "description": "How many days to look back for analysis",
-                        "default": 30
+                        "description": "How many days to look back for analysis (defaults to MAX_LOOKBACK_DAYS env variable if not specified)"
                     }
                 },
                 "required": []
