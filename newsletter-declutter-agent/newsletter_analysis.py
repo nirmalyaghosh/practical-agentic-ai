@@ -6,6 +6,7 @@ from typing import (
 )
 
 from app_logger import get_logger
+from utils import rate_limited
 
 
 logger = get_logger(__name__)
@@ -182,13 +183,20 @@ def scan_newsletters(service, days_back: int = 90) -> Dict:
         messages = results.get("messages", [])
         logger.info(f"Found {len(messages)} recent emails to analyze")
 
-        for msg in messages:
-            msg_data = service.users().messages().get(
+        # Rate limiting to respect Gmail API quotas
+        # Gmail API quota: 250 units/sec, each get() call = 5 units,
+        # Therefore using a max 50 calls/sec (i.e. 20ms between calls).
+        @rate_limited(min_interval=0.02)
+        def fetch_message_metadata(msg_id: str) -> Dict:
+            return service.users().messages().get(
                 userId="me",
-                id=msg["id"],
+                id=msg_id,
                 format="metadata",
                 metadataHeaders=["From", "Subject", "List-Unsubscribe"]
             ).execute()
+
+        for msg in messages:
+            msg_data = fetch_message_metadata(msg["id"])
 
             headers = {
                 h["name"]: h["value"]
