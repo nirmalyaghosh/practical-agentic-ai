@@ -3,13 +3,19 @@ import re
 from typing import (
     Dict,
     List,
+    TypeVar,
 )
 
+
 from app_logger import get_logger
-from utils import rate_limited
+from utils import (
+    rate_limited,
+    retry_with_backoff
+)
 
 
 logger = get_logger(__name__)
+T = TypeVar("T")
 
 
 def analyze_engagement(service, newsletter_ids: List[str]) -> Dict:
@@ -31,11 +37,14 @@ def analyze_engagement(service, newsletter_ids: List[str]) -> Dict:
         try:
             # Search for emails from this sender
             query = f"from:{newsletter_id}"
-            results = service.users().messages().list(
-                userId="me",
-                q=query,
-                maxResults=100
-            ).execute()
+            results = retry_with_backoff(
+                func=service.users().messages().list(
+                    userId="me",
+                    q=query,
+                    maxResults=100
+                ).execute,
+                max_attempts=3
+            )
 
             messages = results.get("messages", [])
             total = len(messages)
