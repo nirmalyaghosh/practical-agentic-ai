@@ -200,9 +200,8 @@ def scan_newsletters(service, days_back: int = -1) -> Dict:
         messages = results.get("messages", [])
         logger.info(f"Found {len(messages)} recent emails to analyze")
 
-        # Rate limiting to respect Gmail API quotas
-        # Gmail API quota: 250 units/sec, each get() call = 5 units,
-        # Therefore using a max 50 calls/sec (i.e. 20ms between calls).
+        # Adaptive rate limiting to respect Gmail API quotas
+        # Starts at 20ms between calls, adapts based on API responses.
         @rate_limited(min_interval=0.02)
         def fetch_message_metadata(msg_id: str) -> Dict:
             return service.users().messages().get(

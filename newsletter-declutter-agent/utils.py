@@ -1,3 +1,4 @@
+import threading
 import time
 
 from typing import (
@@ -20,26 +21,79 @@ def rate_limited(min_interval: float = 0.02) -> Callable[[
         Callable[..., T]],
         Callable[..., T]]:
     """
-    Decorator to enforce minimum interval between API calls.
+    Decorator to enforce adaptive rate limiting between API calls.
+
+    Each decorated function maintains its own adaptive state (thread-safe).
+    Automatically adjusts interval based on API response patterns.
 
     Args:
-        min_interval: Minimum seconds between calls (default: 0.02 = 20ms)
+        min_interval: Starting/minimum seconds between calls
+        (default: 0.02 = 20ms)
 
     Returns:
-        Decorated function with rate limiting applied
+        Decorated function with adaptive rate limiting applied
     """
+
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
-        last_call: list[float] = [0.0]  # Mutable to store state across calls
+        # Per-decorator instance state (not global)
+        state = {
+            "current_interval": min_interval,
+            "min_interval": min_interval,
+            "max_interval": 0.5,
+            "increase_factor": 1.5,
+            "decrease_factor": 0.95,
+            "last_call": 0.0,
+        }
+        # Thread lock for this specific decorator instance
+        lock = threading.RLock()
 
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> T:
-            elapsed = time.time() - last_call[0]
-            if elapsed < min_interval:
-                time.sleep(min_interval - elapsed)
+            with lock:  # Ensure thread-safe access to state
+                # Wait based on current adaptive interval
+                elapsed = time.time() - state["last_call"]
+                current = state["current_interval"]
 
-            result = func(*args, **kwargs)
-            last_call[0] = time.time()
-            return result
+                if elapsed < current:
+                    wait_time = current - elapsed
+                    # Release lock during sleep to allow other threads
+                    lock.release()
+                    try:
+                        time.sleep(wait_time)
+                    finally:
+                        lock.acquire()
+
+            try:
+                result = func(*args, **kwargs)
+
+                # Success: gradually decrease interval
+                with lock:
+                    s_df = state["decrease_factor"]
+                    new_interval = max(
+                        state["min_interval"],
+                        state["current_interval"] * s_df
+                    )
+                    state["current_interval"] = new_interval
+                    state["last_call"] = time.time()
+
+                return result
+
+            except HttpError as e:
+                # Rate limit hit: increase interval
+                with lock:
+                    if e.resp.status == 429:
+                        s_if = state["increase_factor"]
+                        new_interval = min(
+                            state["max_interval"],
+                            state["current_interval"] * s_if
+                        )
+                        state["current_interval"] = new_interval
+                        logger.warning(
+                            f"Rate limit hit for {func.__name__}, "
+                            f"increasing interval to {new_interval*1000:.1f}ms"
+                        )
+                    state["last_call"] = time.time()
+                raise
 
         return wrapper
 
