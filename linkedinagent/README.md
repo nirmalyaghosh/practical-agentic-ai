@@ -1,5 +1,16 @@
 # Practical Agentic AI - Personal LinkedIn Agent
 
+An autonomous personal LinkedIn agent with reasoning pipeline (*run?*, *interesting?*, *continue?*) built with Pydantic AI & Playwright.
+
+Inspired by Pamela Fox's Personal LinkedIn Agent [project](https://github.com/pamelafox/personal-linkedin-agent/tree/main), with key differences:
+
+| | Her Project | This Project |
+|--|----------|--------------|
+| **Focus** | Invitation management | Feed content analysis |
+| **Data Source** | Profile pages | Feed posts |
+| **Output** | Binary decision (accept/reject) | Multi-category classification |
+| **Agency** | Task automation | Autonomous reasoning pipeline |
+
 ## Setup
 
 To set up the `Personal LinkedIn Agent` locally, follow these steps:
