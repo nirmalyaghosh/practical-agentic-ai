@@ -27,7 +27,16 @@
                     "newsletter_ids": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "List of newsletter sender email addresses to analyze"
+                        "description": "List of newsletter sender email addresses to analyze",
+                        "minItems": 1,
+                        "maxItems": 50
+                    },
+                    "threshold_days": {
+                        "type": "integer",
+                        "description": "Only analyze newsletters received within this many days",
+                        "default": 90,
+                        "minimum": 1,
+                        "maximum": 365
                     }
                 },
                 "required": ["newsletter_ids"]
