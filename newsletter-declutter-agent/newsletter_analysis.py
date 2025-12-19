@@ -2,10 +2,13 @@ import os
 import re
 
 from typing import (
+    Any,
     Dict,
     List,
     TypeVar,
 )
+
+from googleapiclient.discovery import Resource
 
 
 from app_logger import get_logger
@@ -19,16 +22,41 @@ logger = get_logger(__name__)
 T = TypeVar("T")
 
 
-def analyze_engagement(service, newsletter_ids: List[str]) -> Dict:
+def analyze_engagement(
+    service: Resource,
+    newsletter_ids: List[str],
+    threshold_days: int = 90
+) -> Dict[str, Any]:
     """
-    Analyze engagement rates for specific newsletters.
+    Analyze engagement rates for specific newsletter senders.
+
+    Calculates open rate by comparing UNREAD label status across
+    recent emails from each sender. Open rate >30% suggests user
+    engagement (recommendation: keep). Open rate <30% suggests
+    low value (recommendation: unsubscribe).
 
     Args:
         service: Gmail API service object
         newsletter_ids: List of newsletter sender email addresses
+        threshold_days: Only consider emails from last N days (default: 90)
 
     Returns:
         Dictionary containing engagement analysis
+        following the structure:
+        {
+            "success": True,
+            "engagement_data": {
+                "sender@example.com": {
+                    "total_received": 45,
+                    "read_count": 32,
+                    "open_rate": 71.1,
+                    "recommendation": "keep"
+                }
+            }
+        }
+
+    Raises:
+        HttpError: If Gmail API returns non-retryable error
     """
     n = len(newsletter_ids)
     logger.info(f"Analyzing engagement for {n} newsletters...")
@@ -39,7 +67,7 @@ def analyze_engagement(service, newsletter_ids: List[str]) -> Dict:
     for newsletter_id in newsletter_ids:
         try:
             # Search for emails from this sender
-            query = f"from:{newsletter_id}"
+            query = f"from:{newsletter_id} newer_than:{threshold_days}d"
             results = retry_with_backoff(
                 func=service.users().messages().list(
                     userId="me",
