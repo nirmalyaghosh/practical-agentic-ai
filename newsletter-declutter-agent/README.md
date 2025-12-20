@@ -135,6 +135,10 @@ pip install -r requirements.txt
 
 5. Set the required environment variables inside `newsletter-declutter-agent.env`
 ```bash
+MAX_LOOKBACK_DAYS=90
+MAX_RESULTS_ANALYZE=50
+MAX_RESULTS_SCAN=50
+MIN_OPEN_RATE=30
 OPENAI_API_KEY=sk-proj-*******************************
 ```
 

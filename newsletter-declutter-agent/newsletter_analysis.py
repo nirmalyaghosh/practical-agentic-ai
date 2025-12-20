@@ -1,40 +1,81 @@
+import os
 import re
 
 from typing import (
+    Any,
     Dict,
     List,
+    TypeVar,
 )
 
+from googleapiclient.discovery import Resource
+
+
 from app_logger import get_logger
+from utils import (
+    rate_limited,
+    retry_with_backoff
+)
 
 
 logger = get_logger(__name__)
+T = TypeVar("T")
 
 
-def analyze_engagement(service, newsletter_ids: List[str]) -> Dict:
+def analyze_engagement(
+    service: Resource,
+    newsletter_ids: List[str],
+    threshold_days: int = 90
+) -> Dict[str, Any]:
     """
-    Analyze engagement rates for specific newsletters.
+    Analyze engagement rates for specific newsletter senders.
+
+    Calculates open rate by comparing UNREAD label status across
+    recent emails from each sender. Open rate >30% suggests user
+    engagement (recommendation: keep). Open rate <30% suggests
+    low value (recommendation: unsubscribe).
 
     Args:
         service: Gmail API service object
         newsletter_ids: List of newsletter sender email addresses
+        threshold_days: Only consider emails from last N days (default: 90)
 
     Returns:
         Dictionary containing engagement analysis
+        following the structure:
+        {
+            "success": True,
+            "engagement_data": {
+                "sender@example.com": {
+                    "total_received": 45,
+                    "read_count": 32,
+                    "open_rate": 71.1,
+                    "recommendation": "keep"
+                }
+            }
+        }
+
+    Raises:
+        HttpError: If Gmail API returns non-retryable error
     """
     n = len(newsletter_ids)
     logger.info(f"Analyzing engagement for {n} newsletters...")
     engagement = {}
 
+    max_results = int(os.environ.get("MAX_RESULTS_ANALYZE", "50"))
+    min_open_rate = int(os.environ.get("MIN_OPEN_RATE", "30"))
     for newsletter_id in newsletter_ids:
         try:
             # Search for emails from this sender
-            query = f"from:{newsletter_id}"
-            results = service.users().messages().list(
-                userId="me",
-                q=query,
-                maxResults=100
-            ).execute()
+            query = f"from:{newsletter_id} newer_than:{threshold_days}d"
+            results = retry_with_backoff(
+                func=service.users().messages().list(
+                    userId="me",
+                    q=query,
+                    maxResults=max_results
+                ).execute,
+                max_attempts=3
+            )
 
             messages = results.get("messages", [])
             total = len(messages)
@@ -60,7 +101,7 @@ def analyze_engagement(service, newsletter_ids: List[str]) -> Dict:
                 "read_count": read_count,
                 "unread_count": total - read_count,
                 "open_rate": round(open_rate, 1),
-                "recommendation": "keep" if open_rate > 30 else
+                "recommendation": "keep" if open_rate > min_open_rate else
                 "consider_unsubscribe"
             }
 
@@ -157,7 +198,7 @@ def extract_unsubscribe_links(service, sender_emails: List[str]) -> Dict:
     }
 
 
-def scan_newsletters(service, days_back: int = 90) -> Dict:
+def scan_newsletters(service, days_back: int = -1) -> Dict:
     """
     Scan Gmail for newsletter subscriptions.
 
@@ -168,27 +209,38 @@ def scan_newsletters(service, days_back: int = 90) -> Dict:
     Returns:
         Dictionary containing newsletter scan results
     """
+
+    if days_back < 1:
+        days_back = int(os.environ.get("MAX_LOOKBACK_DAYS", "90"))
+
     logger.info(f"Scanning newsletters from the last {days_back} days...")
     query = f"newer_than:{days_back}d"
     newsletters = {}
 
     try:
+        max_results = int(os.environ.get("MAX_RESULTS_SCAN", "50"))
         results = service.users().messages().list(
             userId="me",
             q=query,
-            maxResults=500
+            maxResults=max_results
         ).execute()
 
         messages = results.get("messages", [])
         logger.info(f"Found {len(messages)} recent emails to analyze")
 
-        for msg in messages:
-            msg_data = service.users().messages().get(
+        # Adaptive rate limiting to respect Gmail API quotas
+        # Starts at 20ms between calls, adapts based on API responses.
+        @rate_limited(min_interval=0.02)
+        def fetch_message_metadata(msg_id: str) -> Dict:
+            return service.users().messages().get(
                 userId="me",
-                id=msg["id"],
+                id=msg_id,
                 format="metadata",
                 metadataHeaders=["From", "Subject", "List-Unsubscribe"]
             ).execute()
+
+        for msg in messages:
+            msg_data = fetch_message_metadata(msg["id"])
 
             headers = {
                 h["name"]: h["value"]

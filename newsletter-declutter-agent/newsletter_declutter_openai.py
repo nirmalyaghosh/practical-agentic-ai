@@ -8,6 +8,11 @@ to analyze and clean up newsletter subscriptions.
 import json
 import os
 
+from typing import (
+    Any,
+    Dict,
+)
+
 from dotenv import load_dotenv
 from openai import OpenAI
 
@@ -26,7 +31,10 @@ tools = load_openai_tools()
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 
-def _log_function_result(function_name, function_response):
+def _log_function_result(
+    function_name: str,
+    function_response: Dict[str, Any]
+) -> None:
     """
     Helper function used to log a summary of function execution results.
 

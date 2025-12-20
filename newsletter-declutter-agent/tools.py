@@ -1,13 +1,19 @@
 import json
 import os
 
+from typing import (
+    Any,
+    Dict,
+    List,
+)
+
 from app_logger import get_logger
 
 
 logger = get_logger(__name__)
 
 
-def load_openai_tools():
+def load_openai_tools() -> List[Dict[str, Any]]:
     """
     Helper function used to load OpenAI tool definitions from a JSON file.
     """
