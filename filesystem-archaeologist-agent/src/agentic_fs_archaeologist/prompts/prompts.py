@@ -1,5 +1,6 @@
 import json
 
+from functools import lru_cache
 from pathlib import Path
 from typing import (
     Any,
@@ -14,6 +15,7 @@ from agentic_fs_archaeologist.utils.file_utils import validate_file_path
 logger = get_logger(__name__)
 
 
+@lru_cache(maxsize=1)
 def load_prompts(
         prompt_json_file_path: Optional[Path] = None) -> Dict[str, Any]:
     if prompt_json_file_path:
