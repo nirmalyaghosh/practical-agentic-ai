@@ -1,3 +1,6 @@
+import json
+import re
+
 from datetime import datetime
 from typing import List
 
@@ -78,8 +81,23 @@ Based on the above, reason about what to do next. Think step-by-step.
 If you have enough information to finish, set should_continue to false.
 Otherwise, choose an action and provide the required inputs as a JSON string.
 
-IMPORTANT: Format action_input as a valid JSON string with parameter names as keys.
-Example: '{{"path": "/home/user", "depth": 2, "min_size_mb": 100}}'
+CRITICAL JSON FORMATTING RULES for action_input:
+1. MUST be valid JSON - use double quotes for keys and string values
+2. NO trailing commas anywhere
+3. NO empty strings followed by commas (e.g., "","  is INVALID)
+4. For Windows paths, use forward slashes OR escape backslashes
+5. Close all braces and brackets properly
+
+Valid Examples:
+- Single param: '{{"path": "C:/Users/user/Downloads"}}'
+- Multiple params: '{{"path": "/tmp", "size_bytes": 1000,
+                      "is_directory": true}}'
+- No params needed: leave action_input empty or use '{{}}'
+
+INVALID (will cause errors):
+- '{{"path": "C:\\Users",}}' (trailing comma)
+- '{{"path": "",}}' (empty string with comma)
+- '{{"path": value}}' (unquoted string value)
 """
         return prompt
 
@@ -188,20 +206,103 @@ Example: '{{"path": "/home/user", "depth": 2, "min_size_mb": 100}}'
             raise InvalidActionError("None", list(self._get_tools().keys()))
 
         # Parse action_input from JSON string
-        import json
         action_input = {}
         if thought.action_input:
+            # Log raw action_input for debugging
+            logger.debug(
+                "Raw action_input from LLM: "
+                f"{repr(thought.action_input)}"
+            )
+
+            sanitized_input = thought.action_input
             try:
-                # Escape backslashes in Windows paths before JSON parsing
-                sanitized_input = thought.action_input.replace("\\", "\\\\")
+                # Additional JSON sanitization for common LLM formatting errors
+
+                # 1. Remove leading/trailing whitespace
+                sanitized_input = sanitized_input.strip()
+
+                # 2. Escape backslashes in Windows paths
+                sanitized_input = sanitized_input.replace("\\", "\\\\")
+
+                # 3. Remove multiple consecutive commas
+                sanitized_input = re.sub(r",+", ",", sanitized_input)
+
+                # 4. Remove trailing commas before closing brackets/braces
+                sanitized_input = re.sub(
+                    r",(\s*[}\]])", r"\1", sanitized_input
+                )
+
+                # 5. Fix empty string followed by comma: "",  -> ""
+                sanitized_input = re.sub(r'""(\s*),', r'""', sanitized_input)
+
+                # 6. Remove commas after closing braces/brackets
+                sanitized_input = re.sub(r"([}\]])(\s*),", r"\1",
+                                         sanitized_input)
+
+                # 7. Normalize whitespace around colons and commas
+                sanitized_input = re.sub(r"\s*:\s*", ": ", sanitized_input)
+                sanitized_input = re.sub(r"\s*,\s*", ", ", sanitized_input)
+
+                logger.debug(
+                    "Sanitized action_input: "
+                    f"{repr(sanitized_input)}"
+                )
+
+                # Parse the sanitized JSON
                 action_input = json.loads(sanitized_input)
-            except json.JSONDecodeError:
-                logger.warning("Failed to parse action_input: {}".format(
-                    thought.action_input))
+                logger.debug("Successfully parsed action_input: "
+                             f"{action_input}")
+
+            except json.JSONDecodeError as e:
+                logger.warning(
+                    f"Failed to parse action_input after sanitization. "
+                    f"Original: {repr(thought.action_input)}. "
+                    f"Sanitized: {repr(sanitized_input)}. "
+                    f"Error: {e}. Attempting fallback parsing..."
+                )
+                # Fallback: try to extract key-value pairs manually
+                try:
+                    # Enhanced regex-based extraction for common patterns
+                    action_input = {}
+
+                    # Extract "key": "value" or "key": number or "key": boolean
+                    pattern = (
+                        r'"(\w+)"\s*:\s*("(?:[^"\\]|\\.)*"|\d+\.?\d*|'
+                        'true|false|null)'
+                    )
+                    matches = re.findall(pattern, thought.action_input)
+
+                    for key, value in matches:
+                        # Try to parse the value
+                        try:
+                            action_input[key] = json.loads(value)
+                        except json.JSONDecodeError:
+                            # Strip quotes and use as string
+                            action_input[key] = value.strip('"')
+
+                    logger.info(
+                        "Fallback parsing extracted: "
+                        f"{action_input}"
+                    )
+
+                    if not action_input:
+                        logger.error(
+                            f"Fallback parsing produced empty result. "
+                            f"Raw input: {repr(thought.action_input)}"
+                        )
+
+                except Exception as fallback_error:
+                    logger.error(
+                        f"Fallback parsing also failed: {fallback_error}. "
+                        f"Raw input: {repr(thought.action_input)}"
+                    )
 
         # Executing a tool
         tool_to_execute = thought.action
-        logger.debug(f"Executing tool {tool_to_execute}")
+        logger.debug(
+            f"Executing tool '{tool_to_execute}' "
+            f"with inputs: {action_input}"
+        )
         result = await self._execute_tool(
             tool_name=tool_to_execute,
             **action_input
@@ -297,6 +398,14 @@ Example: '{{"path": "/home/user", "depth": 2, "min_size_mb": 100}}'
         thought = await self._call_llm(
             messages=messages,
             response_format=ReActThought,
+        )
+
+        # Log the parsed thought for debugging
+        logger.debug(
+            f"LLM returned ReActThought: "
+            f"action={thought.action}, "
+            f"action_input={repr(thought.action_input)}, "
+            f"should_continue={thought.should_continue}"
         )
 
         return thought
