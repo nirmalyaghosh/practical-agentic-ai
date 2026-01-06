@@ -11,6 +11,7 @@ from pydantic import (
 )
 
 from agentic_fs_archaeologist.models.base import (
+    CleanupRecommendation,
     DeletionConfidence,
     DirectoryType,
     FileType,
@@ -25,6 +26,7 @@ class Classification(BaseModel):
     path: Path
     file_type: Optional[FileType] = None
     directory_type: Optional[DirectoryType] = None
+    recommendation: CleanupRecommendation = CleanupRecommendation.KEEP
     confidence: DeletionConfidence
     reasoning: str
     estimated_savings_bytes: int

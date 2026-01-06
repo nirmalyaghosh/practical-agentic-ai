@@ -100,8 +100,19 @@ async def scan_async(path: str, model: str):
         typer.echo(line)
 
     # Get classifications
-    classifications = result.data.get("classifications", []) \
+    all_classifications = result.data.get("classifications", []) \
         if result.data else []
+
+    # Filter to only show cleanup opportunities
+    # (DELETE or REVIEW recommendations)
+    classifications = [
+        c for c in all_classifications
+        if hasattr(c, 'recommendation') and
+        c.recommendation in ['delete', 'review']
+    ]
+
+    typer.echo(f"\nTotal items analyzed: {len(all_classifications)}")
+    typer.echo(f"Cleanup opportunities found: {len(classifications)}")
 
     if not classifications:
         typer.echo("\nNo cleanup opportunities found.")

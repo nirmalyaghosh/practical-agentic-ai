@@ -11,6 +11,16 @@ class ApprovalStatus(str, Enum):
     SKIPPED = "skipped"
 
 
+class CleanupRecommendation(str, Enum):
+    """
+    Represents the cleanup recommendation for a file/directory.
+    Separate from safety - indicates whether item is a cleanup candidate.
+    """
+    DELETE = "delete"  # Recommend for deletion (cleanup opportunity)
+    REVIEW = "review"  # Potential cleanup, needs human review
+    KEEP = "keep"  # Not a cleanup candidate
+
+
 class DeletionConfidence(str, Enum):
     """
     Represents the confidence levels for deletion safety.

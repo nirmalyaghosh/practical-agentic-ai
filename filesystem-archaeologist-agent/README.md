@@ -21,6 +21,7 @@ A multi-agent system for intelligent filesystem cleanup using agentic AI pattern
 - [Project Structure](#project-structure)
 - [Quick Start](#quick-start)
 - [Example Usage](#example-usage)
+- [Version History](#version-history)
 
 ---
 
@@ -70,12 +71,14 @@ An intelligent filesystem cleanup agent that uses **LLM-driven tool orchestratio
   - What is not: Prompts provide step-by-step instructions; discovery strategy is scripted
 
 **✅ Classifier Agent**
-- Uses LLM-driven ReAct pattern for **tool orchestration** with Memory integration (currently uses SQLite)
-- Categorises items (SAFE/LIKELY_SAFE/UNCERTAIN/UNSAFE) using deterministic pattern matching (for example, `node_modules`, `venv`, `cache`, etc.)
-- Memory enables learning which patterns users approve/reject over time
+- Uses ReAct pattern for **tool orchestration + contextual reasoning** with Memory integration (currently uses SQLite)
+- Categorises items (SAFE/LIKELY_SAFE/UNCERTAIN/UNSAFE) through contextual analysis of purpose, dependencies, and recoverability
+- Analyses deletion safety using LLM instead of deterministic pattern matching
+- Memory enables learning which patterns users approve/reject over time and influences classification decisions
+- Falls back to pattern matching only when LLM cannot classify
 - **Currently partially Agentic**
-  - What is agentic: LLM decides which classification tools to call and in what order
-  - What is not: Classification logic itself is hardcoded (if name == "node_modules" → safe)
+  - What is agentic: LLM decides which classification tools to call, when to call them, AND makes safety decisions through contextual reasoning
+  - What is not: Fallback pattern matching (used only for error recovery)
 
 **❌ Reflection Agent**
 - **Currently rule-based**
@@ -94,9 +97,10 @@ An intelligent filesystem cleanup agent that uses **LLM-driven tool orchestratio
 - ✓ Tool selection (ReAct loop: LLM decides which tool to call next)
 - ✓ Iteration control (LLM decides when exploration is complete)
 - ✓ Memory querying (LLM decides when to check past decisions)
+- ✓ Classification decisions (contextual reasoning about deletion safety)
 
 **Deterministic (Not Agentic)**:
-- ✗ Classification logic (pattern matching: `if name == "node_modules"`)
+- ✗ Fallback logic (pattern matching only when inference fails)
 - ✗ Reflection rules (hardcoded safety checks)
 - ✗ Orchestration plan (fixed workflow)
 - ✗ Prompts are prescriptive (step-by-step instructions, not strategic goals)
@@ -134,14 +138,14 @@ An intelligent filesystem cleanup agent that uses **LLM-driven tool orchestratio
 
 ### 🚀 Evolution Roadmap
 
-**1. LLM-Based Classification**
-- Current State: Deterministic pattern matching (`if name == "node_modules"`)
-- Target State: LLM reasoning about deletion safety
+**1. Classification Using Language Model** ✅
+- ~~Current State: Deterministic pattern matching (`if name == "node_modules"`)~~
+- **New State**: Contextual reasoning about deletion safety
 
 Changes Required:
-- [ ] Replace `_classify_item()` (*which currently uses pattern matching*) to use an LLM prompt to classify as: SAFE/LIKELY_SAFE/UNCERTAIN/UNSAFE with reasoning:
-- [ ] Convert classification from deterministic function to LLM-driven reasoning
-- [ ] Maintain pattern matching as fallback for error cases
+- [x] Replace `_classify_item()` (*which currently uses pattern matching*) to use language model to classify as: SAFE/LIKELY_SAFE/UNCERTAIN/UNSAFE with reasoning
+- [x] Convert classification from deterministic function to model-driven reasoning
+- [x] Maintain pattern matching as fallback for error cases
 
 **2. Autonomous Reflection**
 - Current State: Rule-based safety checks (system paths, size thresholds)
@@ -317,3 +321,9 @@ for item in result.data["classifications"]:
     print(f"Reasoning: {item.reasoning}")
     print(f"Based on {len(item.similar_decisions)} past decisions")
 ```
+
+## Version History
+
+- 0.2.0 (07 Jan 2026) : Implement classification using LLM
+- 0.1.0 (04 Jan 2026) : Inital version of the Filesystem Archaeologist Agent
+---
