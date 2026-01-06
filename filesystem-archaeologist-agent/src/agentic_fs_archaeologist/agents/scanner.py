@@ -46,7 +46,11 @@ class ScannerAgent(ReActAgent):
         Helper function used to build system prompt for scanner agent.
         """
         prompts = load_prompts(prompt_json_file_path=None)
-        return prompts["scanner_agent"]["system_prompt"]
+        scanner_agent_prompt = prompts["scanner_agent"]
+        if "system_prompt_lines" in scanner_agent_prompt:
+            return "\n".join(scanner_agent_prompt["system_prompt_lines"])
+        else:
+            return scanner_agent_prompt["system_prompt"]
 
     async def _compile_results(
         self,

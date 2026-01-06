@@ -44,7 +44,11 @@ class ClassifierAgent(ReActAgent):
 
     def _build_system_prompt(self) -> str:
         prompts = load_prompts(prompt_json_file_path=None)
-        return prompts["classifier_agent"]["system_prompt"]
+        classifier_agent_prompt = prompts["classifier_agent"]
+        if "system_prompt_lines" in classifier_agent_prompt:
+            return "\n".join(classifier_agent_prompt["system_prompt_lines"])
+        else:
+            return classifier_agent_prompt["system_prompt"]
 
     async def _check_dependencies(self, path: str) -> Dict:
         """
