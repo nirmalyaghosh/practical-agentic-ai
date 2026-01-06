@@ -1,3 +1,10 @@
+from datetime import datetime
+from pathlib import Path
+from typing import (
+    Any,
+    Dict,
+)
+
 from agentic_fs_archaeologist.app_logger import get_logger
 from agentic_fs_archaeologist.agents.classifier import ClassifierAgent
 from agentic_fs_archaeologist.agents.plan_execute_agent import (
@@ -17,6 +24,7 @@ from agentic_fs_archaeologist.models import (
     AgentResult,
     ExecutionPlan,
 )
+from agentic_fs_archaeologist.models.filesystem import FileMetadata
 
 
 logger = get_logger(__name__)
@@ -115,6 +123,38 @@ class OrchestratorAgent(PlanAndExecuteAgent):
         }
         return agents[agent_name]
 
+    def _get_metadata(self, item: Dict[str, Any]) -> FileMetadata:
+        """
+        Helper function used to get the metadata.
+        """
+        path = Path(item["path"])
+        size_mb = item.get("size_mb", 0)
+        size_bytes = item.get("size_bytes", int(size_mb * 1024 * 1024))
+        is_directory = item.get("is_directory", True)
+
+        stat = path.stat() if path.exists() else None
+        dt_now = datetime.now()
+
+        # Get the file creation time
+        # NOTE: (reference https://sicorps.com/) As of version 3.12,
+        # `os.stat()` on Windows has deprecated the use of `st_ctime`. Instead,
+        # you should start using the new `st_birthtime` attribute for file
+        # creation time (which is what `st_ctime` used to be).
+        dt_created = datetime.fromtimestamp(stat.st_birthtime) \
+            if stat else dt_now
+
+        dt_modified = datetime.fromtimestamp(stat.st_mtime) if stat else dt_now
+        dt_accessed = datetime.fromtimestamp(stat.st_atime) if stat else dt_now
+        metadata = FileMetadata(
+            path=path,
+            size_bytes=size_bytes,
+            created_at=dt_created,
+            modified_at=dt_modified,
+            accessed_at=dt_accessed,
+            is_directory=is_directory
+        )
+        return metadata
+
     def _update_state(
         self,
         state: AgentState,
@@ -129,7 +169,14 @@ class OrchestratorAgent(PlanAndExecuteAgent):
             return state
 
         if step.agent_name == "DiscoveryAgent":
-            state.discoveries.extend(result.data.get("discoveries", []))
+            discoveries = result.data.get("discoveries", [])
+            for item in discoveries:
+                try:
+                    metadata = self._get_metadata(item=item)
+                    state.discoveries.append(metadata)
+                except Exception as e:
+                    logger.warning("Failed to create FileMetadata for "
+                                   f"{item.get('path')}: {e}")
         elif step.agent_name == "ClassifierAgent":
             classifications = result.data.get("classifications", [])
             state.classifications.extend(classifications)
