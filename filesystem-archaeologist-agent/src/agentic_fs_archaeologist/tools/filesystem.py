@@ -26,7 +26,23 @@ class FileSystemTools:
         try:
             target = Path(path).expanduser().resolve()
 
-            if not (target.exists() and target.is_dir()):
+            if not target.exists():
+                return {"error": "Path does not exist"}
+
+            if target.is_file():
+                # Handle files differently than directories
+                size = target.stat().st_size
+                return {
+                    "path": str(target),
+                    "is_directory": False,
+                    "file_count": 1,
+                    "subdirectory_count": 0,
+                    "file_types": {target.suffix or "no_extension": 1},
+                    "size_bytes": size,
+                    "size_gb": size / (1024 * 1024 * 1024),
+                }
+
+            if not target.is_dir():
                 return {"error": "Invalid directory path"}
 
             # Determine directory type
