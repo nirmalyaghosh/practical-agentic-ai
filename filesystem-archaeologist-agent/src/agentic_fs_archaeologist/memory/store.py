@@ -62,7 +62,7 @@ class MemoryStore:
             FROM
                 memory_entries
             WHERE
-                path_pattern = ?",
+                path_pattern = ?
         """, (pattern,))
         row = cursor.fetchone()
         conn.close()
@@ -168,7 +168,7 @@ class MemoryStore:
             FROM
                 memory_entries
             WHERE
-                path_pattern = ?",
+                path_pattern = ?
         """, (entry.path_pattern,))
         existing = cursor.fetchone()
 
@@ -257,7 +257,7 @@ class MemoryStore:
                 memory_entries
             WHERE
                 path_pattern LIKE ?
-                LIMIT ?",
+                LIMIT ?
         """, ((f"%{query}%", limit)))
         rows = cursor.fetchall()
         conn.close()
