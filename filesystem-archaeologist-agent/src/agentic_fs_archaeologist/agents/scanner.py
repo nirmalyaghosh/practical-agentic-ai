@@ -65,8 +65,12 @@ class ScannerAgent(ReActAgent):
         for obs in history.observations:
             if obs.action == "finish":
                 findings = obs.result.get("findings", [])
+                logger.debug("Found finish observation with "
+                             f"{len(findings)} findings")
+                logger.debug(f"Observation result keys: {obs.result.keys()}")
                 break
 
+        logger.debug(f"Returning discoveries: {len(findings)}")
         return AgentResult(
             success=True,
             data={"discoveries": findings},
@@ -74,14 +78,24 @@ class ScannerAgent(ReActAgent):
             metadata={"total_opportunities": len(findings)}
         )
 
-    async def _finish(self, findings: List) -> Dict:
+    async def _finish(
+        self,
+        findings: Optional[List] = None,
+        items: Optional[List] = None
+    ) -> Dict:
         """
         Helper function used to signal completion with findings.
+        Accepts either 'findings' or 'items' parameter for flexibility.
         """
-        n_findings = len(findings) if findings else 0
+        # Handle both 'findings' and 'items' parameters
+        result_list = findings if findings is not None else items
+        if result_list is None:
+            result_list = []
+
+        n_findings = len(result_list)
         return {
             "action": "finish",
-            "findings": findings if findings else [],
+            "findings": result_list,
             "total": n_findings,
         }
 

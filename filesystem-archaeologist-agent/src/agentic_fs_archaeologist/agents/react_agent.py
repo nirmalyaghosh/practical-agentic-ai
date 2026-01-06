@@ -148,12 +148,29 @@ INVALID (will cause errors):
                 thought = await self._get_thought(
                     state=state,
                     history=history)
+
+                # Clean up action name - remove trailing parentheses if present
+                if thought.action and thought.action.endswith("()"):
+                    thought.action = thought.action[:-2]
+
                 history.thoughts.append(thought)
 
                 # 2. Check if done
-                if (not thought.should_continue or
-                        thought.action is None or
-                        thought.action == "null"):
+                # - but execute finish action first if specified
+                if not thought.should_continue:
+                    if thought.action and thought.action != "null":
+                        # Execute final action (e.g., finish) before breaking
+                        if thought.action not in self._get_tools():
+                            raise InvalidActionError(
+                                thought.action,
+                                list(self._get_tools().keys())
+                            )
+                        observation = await self._execute_action(thought)
+                        history.observations.append(observation)
+                    history.final_answer = thought.thought
+                    break
+
+                if thought.action is None or thought.action == "null":
                     history.final_answer = thought.thought
                     break
 
@@ -214,91 +231,80 @@ INVALID (will cause errors):
                 f"{repr(thought.action_input)}"
             )
 
-            sanitized_input = thought.action_input
+            # First, try parsing without any sanitization
             try:
-                # Additional JSON sanitization for common LLM formatting errors
+                action_input = json.loads(thought.action_input)
+                logger.debug("Successfully parsed action_input: "
+                             f"{action_input}")
+            except json.JSONDecodeError as e:
+                # Only sanitize if initial parsing fails
+                logger.debug(f"Initial parse failed: {e}. "
+                             "Attempting sanitization...")
 
-                # 1. Remove leading/trailing whitespace
-                sanitized_input = sanitized_input.strip()
+                sanitized_input = thought.action_input.strip()
 
-                # 2. Escape backslashes in Windows paths
+                # Only apply minimal sanitization
+                # Escape backslashes in Windows paths
                 sanitized_input = sanitized_input.replace("\\", "\\\\")
 
-                # 3. Remove multiple consecutive commas
-                sanitized_input = re.sub(r",+", ",", sanitized_input)
-
-                # 4. Remove trailing commas before closing brackets/braces
-                sanitized_input = re.sub(
-                    r",(\s*[}\]])", r"\1", sanitized_input
-                )
-
-                # 5. Fix empty string followed by comma: "",  -> ""
-                sanitized_input = re.sub(r'""(\s*),', r'""', sanitized_input)
-
-                # 6. Remove commas after closing braces/brackets
-                sanitized_input = re.sub(r"([}\]])(\s*),", r"\1",
+                # Remove trailing commas before closing brackets/braces
+                # But NOT commas between array/object elements
+                sanitized_input = re.sub(r",(\s*[}\]])", r"\1",
                                          sanitized_input)
-
-                # 7. Normalize whitespace around colons and commas
-                # Only normalize colons after closing quotes
-                # (JSON key-value separators)
-                # This prevents breaking Windows paths like C:/Users
-                sanitized_input = re.sub(r'"\s*:\s*', '": ', sanitized_input)
-                sanitized_input = re.sub(r"\s*,\s*", ", ", sanitized_input)
 
                 logger.debug(
                     "Sanitized action_input: "
                     f"{repr(sanitized_input)}"
                 )
 
-                # Parse the sanitized JSON
-                action_input = json.loads(sanitized_input)
-                logger.debug("Successfully parsed action_input: "
-                             f"{action_input}")
-
-            except json.JSONDecodeError as e:
-                logger.warning(
-                    f"Failed to parse action_input after sanitization. "
-                    f"Original: {repr(thought.action_input)}. "
-                    f"Sanitized: {repr(sanitized_input)}. "
-                    f"Error: {e}. Attempting fallback parsing..."
-                )
-                # Fallback: try to extract key-value pairs manually
                 try:
-                    # Enhanced regex-based extraction for common patterns
-                    action_input = {}
-
-                    # Extract "key": "value" or "key": number or "key": boolean
-                    pattern = (
-                        r'"(\w+)"\s*:\s*("(?:[^"\\]|\\.)*"|\d+\.?\d*|'
-                        'true|false|null)'
+                    action_input = json.loads(sanitized_input)
+                    logger.debug("Successfully parsed after sanitization: "
+                                 f"{action_input}")
+                except json.JSONDecodeError as e2:
+                    logger.warning(
+                        f"Failed to parse action_input after sanitization. "
+                        f"Original: {repr(thought.action_input)}. "
+                        f"Sanitized: {repr(sanitized_input)}. "
+                        f"Error: {e2}. Attempting fallback parsing..."
                     )
-                    matches = re.findall(pattern, thought.action_input)
+                    # Fallback: try to extract key-value pairs manually
+                    try:
+                        # Enhanced regex-based extraction for common patterns
+                        action_input = {}
 
-                    for key, value in matches:
-                        # Try to parse the value
-                        try:
-                            action_input[key] = json.loads(value)
-                        except json.JSONDecodeError:
-                            # Strip quotes and use as string
-                            action_input[key] = value.strip('"')
+                        # Extract "key": "value" or "key": number
+                        # or "key": boolean
+                        pattern = (
+                            r'"(\w+)"\s*:\s*("(?:[^"\\]|\\.)*"|\d+\.?\d*|'
+                            'true|false|null)'
+                        )
+                        matches = re.findall(pattern, thought.action_input)
 
-                    logger.info(
-                        "Fallback parsing extracted: "
-                        f"{action_input}"
-                    )
+                        for key, value in matches:
+                            # Try to parse the value
+                            try:
+                                action_input[key] = json.loads(value)
+                            except json.JSONDecodeError:
+                                # Strip quotes and use as string
+                                action_input[key] = value.strip('"')
 
-                    if not action_input:
-                        logger.error(
-                            f"Fallback parsing produced empty result. "
-                            f"Raw input: {repr(thought.action_input)}"
+                        logger.info(
+                            "Fallback parsing extracted: "
+                            f"{action_input}"
                         )
 
-                except Exception as fallback_error:
-                    logger.error(
-                        f"Fallback parsing also failed: {fallback_error}. "
-                        f"Raw input: {repr(thought.action_input)}"
-                    )
+                        if not action_input:
+                            logger.error(
+                                f"Fallback parsing produced empty result. "
+                                f"Raw input: {repr(thought.action_input)}"
+                            )
+
+                    except Exception as fallback_error:
+                        logger.error(
+                            f"Fallback parsing also failed: {fallback_error}. "
+                            f"Raw input: {repr(thought.action_input)}"
+                        )
 
         # Executing a tool
         tool_to_execute = thought.action
@@ -306,10 +312,20 @@ INVALID (will cause errors):
             f"Executing tool '{tool_to_execute}' "
             f"with inputs: {action_input}"
         )
-        result = await self._execute_tool(
-            tool_name=tool_to_execute,
-            **action_input
-        )
+
+        # Handle case where action_input is a list instead of dict
+        if isinstance(action_input, list):
+            # Wrap list in dict for the tool
+            # This handles cases like finish([]) or finish([item1, item2])
+            result = await self._execute_tool(
+                tool_name=tool_to_execute,
+                items=action_input
+            )
+        else:
+            result = await self._execute_tool(
+                tool_name=tool_to_execute,
+                **action_input
+            )
 
         return ReActObservation(
             action=thought.action,
