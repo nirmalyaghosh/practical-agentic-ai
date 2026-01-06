@@ -240,7 +240,10 @@ INVALID (will cause errors):
                                          sanitized_input)
 
                 # 7. Normalize whitespace around colons and commas
-                sanitized_input = re.sub(r"\s*:\s*", ": ", sanitized_input)
+                # Only normalize colons after closing quotes
+                # (JSON key-value separators)
+                # This prevents breaking Windows paths like C:/Users
+                sanitized_input = re.sub(r'"\s*:\s*', '": ', sanitized_input)
                 sanitized_input = re.sub(r"\s*,\s*", ", ", sanitized_input)
 
                 logger.debug(
