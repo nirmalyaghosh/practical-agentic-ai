@@ -146,6 +146,8 @@ Changes Required:
 - [x] Replace `_classify_item()` (*which currently uses pattern matching*) to use language model to classify as: SAFE/LIKELY_SAFE/UNCERTAIN/UNSAFE with reasoning
 - [x] Convert classification from deterministic function to model-driven reasoning
 - [x] Maintain pattern matching as fallback for error cases
+- [x] Add session-based in-memory cache for LLM classifications (TTL 1hr) to avoid redundant LLM calls on repeated paths, thus reducing costs
+- [] Add persistent cache for LLM classifications (TTL 24hr, stored in DB) to avoid redundant LLM calls across multiple CLI sessions, maximizing cost savings
 
 **2. Autonomous Reflection**
 - Current State: Rule-based safety checks (system paths, size thresholds)
@@ -324,6 +326,7 @@ for item in result.data["classifications"]:
 
 ## Version History
 
+- 0.2.1 (08 Jan 2026) : Add session-based in-memory cache for LLM classifications
 - 0.2.0 (07 Jan 2026) : Implement classification using LLM
 - 0.1.0 (04 Jan 2026) : Inital version of the Filesystem Archaeologist Agent
 ---

@@ -1,4 +1,5 @@
 import subprocess
+import time
 
 from pathlib import Path
 from typing import (
@@ -10,6 +11,7 @@ from typing import (
 
 from agentic_fs_archaeologist.app_logger import get_logger
 from agentic_fs_archaeologist.agents.react_agent import ReActAgent
+from agentic_fs_archaeologist.config import get_settings
 from agentic_fs_archaeologist.memory import MemoryRetrieval
 from agentic_fs_archaeologist.models import (
     AgentState,
@@ -47,6 +49,9 @@ class ClassifierAgent(ReActAgent):
     def __init__(self, memory: MemoryRetrieval):
         super().__init__()
         self.memory = memory
+        settings = get_settings()
+        self.session_cache = {}
+        self.cache_ttl = settings.classifier_cache_ttl
 
     def _build_system_prompt(self) -> str:
         prompts = load_prompts(prompt_json_file_path=None)
@@ -186,6 +191,13 @@ class ClassifierAgent(ReActAgent):
         Falls back to pattern matching on error.
         """
         try:
+            # Check cache first
+            ts = self.session_cache[path]["timestamp"]
+            if (path in self.session_cache and
+               (time.time() - ts) < self.cache_ttl):
+                logger.info(f"Cache hit for {path}")
+                return self.session_cache[path]["result"]
+
             # Fix any drive letter with space after colon
             if ": " in path:
                 path = path.replace(": ", ":/", 1)
@@ -243,7 +255,6 @@ class ClassifierAgent(ReActAgent):
                 temperature=self.temperature)
 
             # Parse LLM response
-            # content = response.get("content", "") # TODO remove
             content = response
 
             # Extract recommendation
@@ -278,7 +289,7 @@ class ClassifierAgent(ReActAgent):
                 idx = content.lower().find("reasoning:")
                 reasoning = content[idx + 10:].strip()
 
-            return {
+            classification_dict = {
                 "path": path,
                 "size_bytes": size_bytes,
                 "size_gb": size_gb,
@@ -290,6 +301,20 @@ class ClassifierAgent(ReActAgent):
                 "reasoning": reasoning,
                 "method": "llm"
             }
+
+            # Store in cache
+            self.session_cache[path] = {
+                "result": classification_dict,
+                "timestamp": time.time()
+            }
+
+            # Clean expired entries
+            self.session_cache = {
+                k: v for k, v in self.session_cache.items()
+                if time.time() - v["timestamp"] < self.cache_ttl
+            }
+
+            return classification_dict
 
         except Exception as e:
             logger.warning(

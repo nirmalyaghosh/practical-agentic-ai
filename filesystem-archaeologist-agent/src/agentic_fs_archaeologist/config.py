@@ -41,6 +41,10 @@ class Settings():
     memory_db_path: Path = Path(os.getenv("MEMORY_DB_PATH",
                                           default="memory.db"))
 
+    # Cache Configuration
+    classifier_cache_ttl: int = int(os.getenv("CLASSIFIER_CACHE_TTL",
+                                              default="3600"))
+
     # Paths
     data_dir: Path = Path(os.getenv("DATA_DIR", default="."))
 
