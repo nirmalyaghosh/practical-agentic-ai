@@ -158,6 +158,12 @@ INVALID (will cause errors):
                 # 2. Check if done
                 # - but execute finish action first if specified
                 if not thought.should_continue:
+                    # If action is not specified but action_input has data,
+                    # assume it's meant for "finish" action
+                    if (thought.action is None or thought.action == "null") \
+                            and thought.action_input:
+                        thought.action = "finish"
+
                     if thought.action and thought.action != "null":
                         # Execute final action (e.g., finish) before breaking
                         if thought.action not in self._get_tools():
