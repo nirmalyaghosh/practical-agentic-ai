@@ -47,6 +47,7 @@ class MemoryStore:
             MemoryEntry if found, None otherwise
         """
         conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute("""
             SELECT
@@ -82,6 +83,7 @@ class MemoryStore:
             List of MemoryEntry objects
         """
         conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
         cursor.execute(
@@ -241,6 +243,7 @@ class MemoryStore:
             List of matching MemoryEntry objects
         """
         conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute("""
             SELECT
@@ -258,7 +261,7 @@ class MemoryStore:
             WHERE
                 path_pattern LIKE ?
                 LIMIT ?
-        """, ((f"%{query}%", limit)))
+        """, (f"%{query}%", limit))
         rows = cursor.fetchall()
         conn.close()
 
