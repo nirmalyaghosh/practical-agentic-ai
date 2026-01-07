@@ -258,6 +258,9 @@ INVALID (will cause errors):
                 sanitized_input = re.sub(r",(\s*[}\]])", r"\1",
                                          sanitized_input)
 
+                # Replace single quotes with double quotes to make valid JSON
+                sanitized_input = sanitized_input.replace("'", '"')
+
                 logger.debug(
                     "Sanitized action_input: "
                     f"{repr(sanitized_input)}"
