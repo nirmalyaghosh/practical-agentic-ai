@@ -41,6 +41,22 @@ class ReflectionAgent(BaseAgent):
         "Pictures",
     ]
 
+    # File extensions that are safe to delete from Downloads
+    CLEANUP_SAFE_EXTENSIONS = [
+        ".exe",
+        ".msi",
+        ".dmg",
+        ".pkg",  # Installers
+        ".zip",
+        ".rar",
+        ".7z",
+        ".tar",
+        ".gz",
+        ".bz2",  # Archives
+        ".iso",
+        ".img",  # Disk images
+    ]
+
     async def execute(self, state: AgentState) -> AgentResult:
         """
         Execute reflection by reviewing classifications.
@@ -75,16 +91,20 @@ class ReflectionAgent(BaseAgent):
                     suggested_confidence = DeletionConfidence.LIKELY_SAFE
 
             # Check 3: Important user directories
+            # Exception: installers/archives in Downloads are
+            # cleanup candidates
             if self._in_important_dir(classification.path):
                 if classification.confidence in [
                     DeletionConfidence.SAFE,
                     DeletionConfidence.LIKELY_SAFE
                 ]:
-                    s = "Located in important user directory - downgrading"
-                    issues.append(s)
-                    r = "May contain personal or important files"
-                    additional_risks.append(r)
-                    suggested_confidence = DeletionConfidence.UNCERTAIN
+                    # Do not downgrade installers/archives in Downloads
+                    if not self._is_cleanup_safe_file(classification.path):
+                        s = "Located in important user directory - downgrading"
+                        issues.append(s)
+                        r = "May contain personal or important files"
+                        additional_risks.append(r)
+                        suggested_confidence = DeletionConfidence.UNCERTAIN
 
             # Check 4: Recently modified files marked as safe
             # If reasoning mentions recent modification but still marked safe
@@ -138,6 +158,15 @@ class ReflectionAgent(BaseAgent):
                     f"\\{important_dir}\\" in path_str:
                 return True
         return False
+
+    def _is_cleanup_safe_file(self, path: Path) -> bool:
+        """
+        Helper function used to check if file type is safe to cleanup
+        from Downloads. Installers and archives are typically safe to
+        delete.
+        """
+        suffix = path.suffix.lower()
+        return suffix in self.CLEANUP_SAFE_EXTENSIONS
 
     def _is_system_path(self, path: Path) -> bool:
         """
