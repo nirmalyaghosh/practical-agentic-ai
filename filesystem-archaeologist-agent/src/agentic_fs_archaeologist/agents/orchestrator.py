@@ -24,6 +24,11 @@ from agentic_fs_archaeologist.models import (
     AgentResult,
     ExecutionPlan,
 )
+from agentic_fs_archaeologist.models.classification import Classification
+from agentic_fs_archaeologist.models.base import (
+    CleanupRecommendation,
+    DeletionConfidence,
+)
 from agentic_fs_archaeologist.models.filesystem import FileMetadata
 
 
@@ -178,9 +183,21 @@ class OrchestratorAgent(PlanAndExecuteAgent):
                     logger.warning("Failed to create FileMetadata for "
                                    f"{item.get('path')}: {e}")
         elif step.agent_name == "ClassifierAgent":
-            classifications = result.data.get("classifications", [])
-            state.classifications.extend(classifications)
+            classification_dicts = result.data.get("classifications", [])
+            state.classifications.extend([
+                Classification(
+                    path=Path(cls["path"]),
+                    recommendation=CleanupRecommendation(
+                        cls["recommendation"].upper()),
+                    confidence=DeletionConfidence(cls["category"].upper()),
+                    reasoning=cls.get("reasoning", ""),
+                    estimated_savings_bytes=cls.get("size_bytes", 0)
+                )
+                for cls in classification_dicts
+            ])
         elif step.agent_name == "ReflectionAgent":
             state.critiques.extend(result.data.get("critiques", []))
 
+        logger.debug(f"Updated state for {step.agent_name}: "
+                     f"{len(state.discoveries)} discoveries")
         return state

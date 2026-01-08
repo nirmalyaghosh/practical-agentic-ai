@@ -236,7 +236,7 @@ class PlanAndExecuteAgent(BaseAgent):
 
         return AgentResult(
             success=plan.is_complete,
-            data=state.context,
+            data={"classifications": state.classifications},
             reasoning=reasoning,
             metadata={"plan": plan}
         )
