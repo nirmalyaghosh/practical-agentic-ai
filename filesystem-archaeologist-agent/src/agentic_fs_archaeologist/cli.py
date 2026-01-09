@@ -33,6 +33,14 @@ def _echo_banner():
     typer.echo(f"{'='*60}\n")
 
 
+def _echo_and_log(message: str):
+    """
+    Helper function
+    """
+    typer.echo(message)
+    logger.info(message.replace("\n", ""))
+
+
 @app.command()
 def info():
     """
@@ -75,7 +83,7 @@ async def scan_async(path: str, model: str):
     """
 
     _echo_banner()
-    logger.debug(f"Scanning: {path}\n")
+    _echo_and_log(f"Scanning: {path}\n")
 
     # Initialize memory
     store = MemoryStore()
@@ -95,9 +103,9 @@ async def scan_async(path: str, model: str):
         return
 
     # Show reasoning
-    typer.echo("Workflow completed!\n")
+    _echo_and_log("Workflow completed!\n")
     for line in result.reasoning:
-        typer.echo(line)
+        _echo_and_log(line)
 
     # Get classifications
     all_classifications = result.data.get("classifications", []) \
@@ -111,11 +119,11 @@ async def scan_async(path: str, model: str):
         c.recommendation in ['delete', 'review']
     ]
 
-    typer.echo(f"\nTotal items analyzed: {len(all_classifications)}")
-    typer.echo(f"Cleanup opportunities found: {len(classifications)}")
+    _echo_and_log(f"\nTotal items analyzed: {len(all_classifications)}")
+    _echo_and_log(f"Cleanup opportunities found: {len(classifications)}")
 
     if not classifications:
-        typer.echo("\nNo cleanup opportunities found.")
+        _echo_and_log("\nNo cleanup opportunities found.")
         return
 
     # HITL: Request approval
@@ -123,7 +131,7 @@ async def scan_async(path: str, model: str):
     decisions = approval_gate.request_approval(classifications)
 
     # Save decisions to memory
-    typer.echo("\nSaving decisions to memory...")
+    _echo_and_log("\nSaving decisions to memory...")
 
     for decision in decisions:
         # Extract pattern
@@ -140,8 +148,8 @@ async def scan_async(path: str, model: str):
 
         store.save(entry)
 
-    typer.echo("Done! Decisions saved for future sessions.")
-    typer.echo("\nNote: MVP stops here (no actual deletion)")
+    _echo_and_log("Done! Decisions saved for future sessions.")
+    _echo_and_log("\nNote: MVP stops here (no actual deletion)")
 
 
 if __name__ == "__main__":

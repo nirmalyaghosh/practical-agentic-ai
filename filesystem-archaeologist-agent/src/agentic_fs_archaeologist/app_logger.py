@@ -46,9 +46,10 @@ def get_logger(name: str):
     log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     formatter = logging.Formatter(log_format)
 
-    # Create console handler and set level to debug
+    # Create console handler and set level to WARNING
+    # (to avoid duplicating what the CLI's typer displays to console)
     ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
+    ch.setLevel(logging.WARNING)
     ch.setFormatter(formatter)
 
     # Default to 'logs' directory if no path specified
