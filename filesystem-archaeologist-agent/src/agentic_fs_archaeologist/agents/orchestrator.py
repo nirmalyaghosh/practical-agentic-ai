@@ -188,8 +188,8 @@ class OrchestratorAgent(PlanAndExecuteAgent):
                 Classification(
                     path=Path(cls["path"]),
                     recommendation=CleanupRecommendation(
-                        cls["recommendation"].upper()),
-                    confidence=DeletionConfidence(cls["category"].upper()),
+                        cls["recommendation"].lower()),
+                    confidence=DeletionConfidence(cls["category"].lower()),
                     reasoning=cls.get("reasoning", ""),
                     estimated_savings_bytes=cls.get("size_bytes", 0)
                 )
