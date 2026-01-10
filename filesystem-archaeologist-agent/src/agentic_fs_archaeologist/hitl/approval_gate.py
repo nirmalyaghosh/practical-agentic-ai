@@ -10,6 +10,7 @@ from agentic_fs_archaeologist.models import (
     Classification,
     UserDecision,
 )
+from agentic_fs_archaeologist.utils.file_utils import format_file_size
 
 
 logger = get_logger(__name__)
@@ -35,7 +36,7 @@ class ApprovalGate:
         desc_str = "\n".join([
             "-"*60,
             f"  Path: {c.path}",
-            f"  Size: {c.savings_gb:.2f} GB",
+            f"  Size: {format_file_size(c.estimated_savings_bytes)}",
             f"  Reasoning: {c.reasoning[:100]}..."
         ])
         return desc_str
@@ -72,12 +73,14 @@ class ApprovalGate:
         table_title = f"[{border_color}]{count} {title}[/{border_color}]"
         table = Table(title=table_title)
         table.add_column("File Path", style="cyan")
-        table.add_column("Size (MB)", justify="right", style="yellow")
+        table.add_column("Size", justify="right", style="yellow")
 
         for c in classifications[:max_rows]:
-            size_mb_str = f"{(c.estimated_savings_bytes / (1024*1024)):.1f} MB"
-            table.add_row(str(c.path), f"{size_mb_str}")
-            logger.info(f"Item: {str(c.path)} ({size_mb_str})")
+            size_str = format_file_size(c.estimated_savings_bytes)
+            table.add_row(str(c.path), f"{size_str}")
+            logger.info(f"Item: {str(c.path)} "
+                        f"(size_bytes={c.estimated_savings_bytes}, "
+                        f"display={size_str})")
 
         if count > max_rows:
             table.add_row(f"... and {count - 5} more", "")
@@ -109,11 +112,10 @@ class ApprovalGate:
         clsf_path_str = str(classification.path)
         logger.info(f"Reviewing uncertain item {index}: {clsf_path_str}")
 
-        size_mb = classification.estimated_savings_bytes / (1024*1024)
-        size_mb_str = f"{(size_mb):.1f} MB"
+        size_str = format_file_size(classification.estimated_savings_bytes)
         item_panel = Panel(
             f"[bold]Path:[/bold] {clsf_path_str}\n"
-            f"[bold]Size:[/bold] {size_mb_str}\n"
+            f"[bold]Size:[/bold] {size_str}\n"
             f"[bold]Reasoning:[/bold] {classification.reasoning[:100]}...",
             title=f"Review Item {index}",
             border_style="red"

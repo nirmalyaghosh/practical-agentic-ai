@@ -299,7 +299,7 @@ result = await scanner.execute(state)
 
 # View discoveries
 for discovery in result.data["discoveries"]:
-    print(f"Found: {discovery.path} ({discovery.size_gb:.2f} GB)")
+    print(f"Found: {discovery.path}")
     print(f"Reasoning: {discovery.reasoning}")
 ```
 

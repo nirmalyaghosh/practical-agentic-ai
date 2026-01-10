@@ -184,17 +184,32 @@ class OrchestratorAgent(PlanAndExecuteAgent):
                                    f"{item.get('path')}: {e}")
         elif step.agent_name == "ClassifierAgent":
             classification_dicts = result.data.get("classifications", [])
-            state.classifications.extend([
-                Classification(
-                    path=Path(cls["path"]),
-                    recommendation=CleanupRecommendation(
-                        cls["recommendation"].lower()),
-                    confidence=DeletionConfidence(cls["category"].lower()),
-                    reasoning=cls.get("reasoning", ""),
-                    estimated_savings_bytes=cls.get("size_bytes", 0)
+            for cls in classification_dicts:
+                # Find matching discovery for size lookup
+                matching_discovery = None
+                if state.discoveries:
+                    matching_discovery = next(
+                        (d for d in state.discoveries
+                         if str(d.path) == cls.get("path")),
+                        None
+                    )
+
+                # Use classifier's size_bytes or fall back to discovery size
+                size_bytes = cls.get("size_bytes", 0)
+                if size_bytes == 0 and matching_discovery:
+                    size_bytes = matching_discovery.size_bytes
+
+                state.classifications.append(
+                    Classification(
+                        path=Path(cls["path"]),
+                        recommendation=CleanupRecommendation(
+                            cls["recommendation"].lower()),
+                        confidence=DeletionConfidence(cls["category"].lower()),
+                        reasoning=cls.get("reasoning", ""),
+                        estimated_savings_bytes=size_bytes
+                    )
                 )
-                for cls in classification_dicts
-            ])
+
         elif step.agent_name == "ReflectionAgent":
             state.critiques.extend(result.data.get("critiques", []))
 

@@ -20,6 +20,7 @@ from agentic_fs_archaeologist.models import (
 )
 from agentic_fs_archaeologist.prompts.prompts import load_prompts
 from agentic_fs_archaeologist.tools import FileSystemTools
+from agentic_fs_archaeologist.utils.file_utils import format_file_size
 
 
 logger = get_logger(__name__)
@@ -52,6 +53,7 @@ class ClassifierAgent(ReActAgent):
         settings = get_settings()
         self.session_cache = {}
         self.cache_ttl = settings.classifier_cache_ttl
+        self.classifications = []  # Store intermediate results
 
     def _build_system_prompt(self) -> str:
         prompts = load_prompts(prompt_json_file_path=None)
@@ -163,12 +165,17 @@ class ClassifierAgent(ReActAgent):
         age_info = FileSystemTools.get_file_age(path)
         age_days = age_info.get("age_days", 0)
 
+        # Return
+        xpl = "Fallback pattern matching used since LLM classification failed."
         return {
             "path": path,
             "size_bytes": size_bytes,
             "size_gb": size_bytes / (1024**3),
             "is_directory": is_directory,
             "type": dir_type or item_type or "other",
+            "category": "UNCERTAIN",
+            "confidence": "LOW",
+            "reasoning": xpl,
             "age_days": age_days,
             "recommendation": recommendation,
         }
@@ -176,8 +183,48 @@ class ClassifierAgent(ReActAgent):
     async def _classify_item_using_llm(
             self,
             path: str,
-            size_bytes: int,
-            is_directory: bool) -> Dict:
+            size_bytes: int = 0,
+            is_directory: bool = False) -> Dict:
+        """
+        Classify an item and store the result in self.classifications.
+        """
+        result = await self._do_classification(path, size_bytes, is_directory)
+        self.classifications.append(result)
+        return result
+
+    async def _compile_results(
+        self,
+        history: ReActHistory,
+        state: AgentState
+    ) -> AgentResult:
+        """
+        Helper function used to compile classification results.
+        """
+        # Find the finish observation
+        classifications = []
+        for obs in history.observations:
+            if obs.action == "finish":
+                classifications = obs.result.get("classifications", [])
+                break
+
+        # If no finish observation found, use accumulated classifications
+        if not classifications:
+            classifications = self.classifications
+            logger.debug("Using accumulated classifications: "
+                         f"{len(classifications)}")
+
+        return AgentResult(
+            success=True,
+            data={"classifications": classifications},
+            reasoning=self._extract_reasoning(history),
+            metadata={"total_classified": len(classifications)}
+        )
+
+    async def _do_classification(
+            self,
+            path: str,
+            size_bytes: int = 0,
+            is_directory: bool = False) -> Dict:
         """
         Helper function used for classification (using language model) with
         contextual analysis of deletion safety.
@@ -191,9 +238,35 @@ class ClassifierAgent(ReActAgent):
         Falls back to pattern matching on error.
         """
         try:
+            logger.debug(f"Classifying {path}: size_bytes={size_bytes}, "
+                         f"is_directory={is_directory}")
+
+            # Check for and correct LLM parameter parsing errors
+            # LLM sometimes incorrectly sets is_directory=True
+            # for files with extensions
+            is_directory_corrected = False
+            if is_directory and Path(path).suffix:
+                logger.debug("Correcting is_directory from True to False "
+                             f"for {path} (has file extension)")
+                is_directory = False
+                is_directory_corrected = True
+                # Clear cached result from incorrect
+                # is_directory=True classification
+                if path in self.session_cache:
+                    logger.debug(f"Clearing cached result for {path} "
+                                 "due to is_directory correction")
+                    del self.session_cache[path]
+
+            # If size_bytes is 0 or missing, try to get it from filesystem
+            if size_bytes == 0:
+                size_bytes = self._get_file_size(path=path)
+                logger.debug(f"File {path}: size_bytes={size_bytes}")
+
             # Check cache first
-            ts = self.session_cache[path]["timestamp"]
-            if (path in self.session_cache and
+            ts = self.session_cache[path]["timestamp"] \
+                if path in self.session_cache else None
+            if (path in self.session_cache and ts is not None and
+                is_directory_corrected is False and
                (time.time() - ts) < self.cache_ttl):
                 logger.info(f"Cache hit for {path}")
                 return self.session_cache[path]["result"]
@@ -230,11 +303,11 @@ class ClassifierAgent(ReActAgent):
             prompt_template = prompts["llm_classification"]["template"]
 
             item_type = "directory" if is_directory else "file"
-            size_gb = size_bytes / (1024**3)
+            size_str = format_file_size(bytes_size=size_bytes)
 
             prompt = prompt_template.format(
                 path=path,
-                size_gb=f"{size_gb:.3f}",
+                size_gb=size_str,
                 age_days=age_days,
                 item_type=item_type,
                 memory_context=memory_context if memory_context else
@@ -292,7 +365,6 @@ class ClassifierAgent(ReActAgent):
             classification_dict = {
                 "path": path,
                 "size_bytes": size_bytes,
-                "size_gb": size_gb,
                 "is_directory": is_directory,
                 "age_days": age_days,
                 "recommendation": recommendation,
@@ -327,28 +399,6 @@ class ClassifierAgent(ReActAgent):
             )
             result["method"] = "fallback"
             return result
-
-    async def _compile_results(
-        self,
-        history: ReActHistory,
-        state: AgentState
-    ) -> AgentResult:
-        """
-        Helper function used to compile classification results.
-        """
-        # Find the finish observation
-        classifications = []
-        for obs in history.observations:
-            if obs.action == "finish":
-                classifications = obs.result.get("classifications", [])
-                break
-
-        return AgentResult(
-            success=True,
-            data={"classifications": classifications},
-            reasoning=self._extract_reasoning(history),
-            metadata={"total_classified": len(classifications)}
-        )
 
     async def execute(self, state: AgentState) -> AgentResult:
         """
@@ -395,12 +445,29 @@ class ClassifierAgent(ReActAgent):
             parts.append(f"\nItems to classify ({n} total):")
             # Show first 10
             for i, item in enumerate(state.discoveries[:10], 1):
-                parts.append(f"  {i}. {item.path} ({item.size_gb:.2f} GB, "
+                size_str = format_file_size(item.size_bytes)
+                parts.append(f"  {i}. {item.path} ({size_str}, "
                              f"{'dir' if item.is_directory else 'file'})")
             if n > 10:
                 parts.append(f"  ... and {n - 10} more items")
 
         return "\n".join(parts) if parts else "No context provided"
+
+    def _get_file_size(self, path: str) -> int:
+        size_bytes = 0
+        try:
+            target = Path(path).expanduser().resolve()
+            if target.exists():
+                if target.is_file():
+                    size_bytes = target.stat().st_size
+                else:
+                    size_bytes = FileSystemTools._get_dir_size(target)
+                logger.debug("Got size from filesystem: "
+                             f"{size_bytes} bytes")
+        except Exception as e:
+            logger.warning("Could not get size from filesystem "
+                           f"for {path}: {e}")
+        return size_bytes
 
     async def _get_items_to_classify(self) -> Dict:
         """
