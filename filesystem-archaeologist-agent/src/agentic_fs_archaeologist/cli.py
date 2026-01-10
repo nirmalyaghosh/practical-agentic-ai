@@ -137,6 +137,20 @@ async def scan_async(path: str, model: str):
         # Extract pattern
         pattern = memory._extract_pattern(decision.path)
 
+        # Log detailed information about what we're saving
+        logger.info(f"Processing decision save: path={decision.path}, "
+                    f"decision={decision.status.value}")
+        logger.info(f"Extracted pattern: {pattern}")
+
+        # Check if pattern already exists
+        existing = store.find_by_pattern(pattern)
+        if existing:
+            logger.info(f"Existing pattern found: approval_rate={existing.approval_rate:.2%}, "
+                       f"approval_count={existing.approval_count}, "
+                       f"rejection_count={existing.rejection_count}")
+        else:
+            logger.info("New pattern: will create initial memory entry")
+
         # Create memory entry
         entry = MemoryEntry(
             path_pattern=pattern,
@@ -146,7 +160,23 @@ async def scan_async(path: str, model: str):
             confidence=decision.classification.confidence,
         )
 
-        store.save(entry)
+        # Log the entry structure
+        entry_details = (f"path_pattern={entry.path_pattern}, "
+                        f"file_type={entry.file_type}, "
+                        f"directory_type={entry.directory_type}, "
+                        f"user_decision={entry.user_decision.value}, "
+                        f"confidence={entry.confidence.value}")
+        logger.info(f"Saving MemoryEntry: {entry_details}")
+
+        saved_entry = store.save(entry)
+
+        # Verify what was actually saved (read back from DB)
+        refreshed = store.find_by_pattern(pattern)
+        if refreshed:
+            final_details = (f"approval_count={refreshed.approval_count}, "
+                           f"rejection_count={refreshed.rejection_count}, "
+                           f"approval_rate={refreshed.approval_rate:.2%}")
+            logger.info(f"After save - memory state: {final_details}")
 
     _echo_and_log("Done! Decisions saved for future sessions.")
     _echo_and_log("\nNote: MVP stops here (no actual deletion)")
