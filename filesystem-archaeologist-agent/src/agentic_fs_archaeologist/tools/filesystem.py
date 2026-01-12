@@ -1,8 +1,11 @@
+import csv
+import os
 import platform
 import shutil
 import string
 import time
 
+from datetime import datetime
 from pathlib import Path
 from typing import (
     Dict,
@@ -142,11 +145,11 @@ class FileSystemTools:
                     try:
                         gitignore_content = gitignore.read_text()
                         rel_path = str(target.relative_to(current))
-                        for line in gitignore_content.split('\n'):
+                        for line in gitignore_content.split("\n"):
                             line = line.strip()
-                            if line and not line.startswith('#'):
+                            if line and not line.startswith("#"):
                                 # Simple pattern matching
-                                pattern = line.rstrip('/')
+                                pattern = line.rstrip("/")
                                 if rel_path.startswith(pattern) or \
                                         target.name == pattern:
                                     in_gitignore = True
@@ -251,6 +254,19 @@ class FileSystemTools:
             return {"error": str(e)}
 
     @staticmethod
+    def get_file_size(path: str) -> int:
+        try:
+            stat = os.stat(path)
+            if os.path.isdir(path):
+                size = FileSystemTools._get_dir_size(Path(path))
+            else:
+                size = stat.st_size
+        except (OSError, PermissionError):
+            size = 0
+
+        return size
+
+    @staticmethod
     def get_recycle_bin_stats() -> Dict:
         """
         Helper function used to get recycle bin statistics by calculating
@@ -303,6 +319,85 @@ class FileSystemTools:
                 "size_gb": total_size / (1024 * 1024 * 1024),
                 "drives_checked": drives_checked,
                 "status": status,
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    def is_system_path(path: str) -> bool:
+        """
+        Helper function used to check if path is a system director.
+        """
+        if platform.system() == "Windows":
+            return path.upper().startswith((
+                "C:\\WINDOWS",
+                "C:\\PROGRAM FILES",
+                "C:\\$RECYCLE.BIN"
+            ))
+        return False
+
+    @staticmethod
+    def monitor_filesystem(
+            path: str = "~",
+            csv_file: str = "filesystem_monitor.csv") -> Dict:
+        """
+        Helper function used to monitor filesystem using tree-like traversal,
+        save paths to CSV with timestamps and priorities.
+        """
+        try:
+            target = Path(path).expanduser().resolve()
+            if not target.exists():
+                return {"error": f"Path does not exist: {path}"}
+
+            paths_found = {}
+            # Tree traversal
+            for root, dirs, files in os.walk(target):
+                for name in files + dirs:
+                    full_path = os.path.join(root, name)
+                    is_syspath = FileSystemTools.is_system_path(path=full_path)
+                    priority = 0 if is_syspath else 1
+                    size = FileSystemTools.get_file_size(path=full_path)
+                    paths_found[full_path] = (priority, size)
+
+            # Load existing CSV
+            existing = {}
+            if os.path.exists(csv_file):
+                with open(csv_file, "r", newline="", encoding="utf-8") as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        lv = datetime.fromisoformat(row["last_visited"])
+                        size_bytes = int(row.get("size_bytes", 0)) \
+                            if "size_bytes" in row else 0
+                        existing[row["path"]] =\
+                            (lv, int(row["priority"]), size_bytes)
+
+            # Iterate/create entries
+            default_ts = datetime(2026, 1, 1, 0, 0, 0)
+            updated = []
+            for p, (pri, sz) in paths_found.items():
+                if p in existing:
+                    existing_ts = existing[p][0]
+                    updated.append((p, existing_ts, pri, sz))
+                else:
+                    updated.append((p, default_ts, pri, sz))  # New entry
+
+            # For unchanged paths, keep existing
+            for p, (ts, pri, sz) in existing.items():
+                if p not in paths_found:
+                    updated.append((p, ts, pri, sz))
+
+            # Save CSV
+            col_names = ["path", "last_visited", "priority", "size_bytes"]
+            with open(csv_file, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(col_names)
+                for p, ts, pri, sz in updated:
+                    writer.writerow([p, ts.isoformat(), pri, sz])
+
+            return {
+                "scanned_paths": len(paths_found),
+                "total_monitored": len(updated),
+                "csv_file": csv_file
             }
         except Exception as e:
             return {"error": str(e)}

@@ -3,6 +3,7 @@ Command-line interface for the Filesystem Archaeologist Agent.
 """
 
 import asyncio
+import time
 
 import typer
 
@@ -19,6 +20,7 @@ from agentic_fs_archaeologist.models import (
     MemoryEntry,
     UserDecision,
 )
+from agentic_fs_archaeologist.tools.filesystem import FileSystemTools
 
 
 app = typer.Typer()
@@ -56,6 +58,31 @@ def info():
 
 def main():
     app()
+
+
+@app.command()
+def monitor(
+    path: str = typer.Option("~", help="Path to monitor"),
+    csv_file: str = typer.Option("filesystem_monitor.csv",
+                                 help="CSV file to save to"),
+):
+    """
+    Monitor filesystem and save path tracking to CSV.
+    """
+
+    start_ts = time.time()
+    logger.info("Starting 'monitor_filesystem' run")
+    result = FileSystemTools.monitor_filesystem(path=path, csv_file=csv_file)
+    if "error" in result:
+        typer.echo(f"Error: {result['error']}", err=True)
+        raise typer.Exit(1)
+    n1, n2 = result["scanned_paths"], result["total_monitored"]
+    message = f"Monitored {n1} new paths, total {n2} in {csv_file}"
+    num_s = time.time() - start_ts
+    num_m = num_s/60
+    logger.info(f"Completed 'monitor_filesystem' run in {num_m:.2f} minutes")
+    logger.info(message)
+    typer.echo(message)
 
 
 def _persist_decisions_to_memory(

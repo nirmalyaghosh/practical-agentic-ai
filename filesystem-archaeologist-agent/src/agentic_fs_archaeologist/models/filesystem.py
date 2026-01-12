@@ -84,3 +84,14 @@ class DirectoryInfo(BaseModel):
         Helper function used to get the total size in gigabytes.
         """
         return self.total_size_bytes / (1024 * 1024 * 1024)
+
+
+class MonitoredPath(BaseModel):
+    """
+    Pydantic data model used to represent/contain a filesystem path being
+    monitored with priority and visit tracking.
+    """
+    path: str
+    last_visited: datetime = Field(default=datetime(2026, 1, 1, 0, 0, 0))
+    priority: int = Field(default=1, ge=0, le=5)  # 0-5 range
+    size_bytes: int = Field(default=0)  # File/directory size
