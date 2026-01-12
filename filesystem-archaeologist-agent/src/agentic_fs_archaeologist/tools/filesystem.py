@@ -1,3 +1,6 @@
+import platform
+import shutil
+import string
 import time
 
 from pathlib import Path
@@ -194,6 +197,30 @@ class FileSystemTools:
         return total
 
     @staticmethod
+    def get_disk_usage(path: str) -> Dict:
+        """
+        Helper function used to get disk usage statistics for the given
+        path/drive.
+        """
+        try:
+            target = Path(path).expanduser().resolve()
+            if not target.exists():
+                return {"error": "Path does not exist"}
+
+            usage = shutil.disk_usage(target)
+            free_percent = (usage.free / usage.total * 100) \
+                if usage.total > 0 else 0
+            return {
+                "path": path,
+                "total_bytes": usage.total,
+                "used_bytes": usage.used,
+                "free_bytes": usage.free,
+                "free_percent": free_percent,
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
     def get_file_age(path: str) -> Dict:
         """
         Helper function used to get file age information.
@@ -219,6 +246,63 @@ class FileSystemTools:
                 "age_days": age_days,
                 "age_months": age_days // 30,
                 "last_modified": time.ctime(stat.st_mtime),
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    def get_recycle_bin_stats() -> Dict:
+        """
+        Helper function used to get recycle bin statistics by calculating
+        total size of recycle bin folders.
+        """
+
+        system = platform.system()
+        total_size = 0
+        drives_checked = []
+        try:
+            if system == "Windows":
+                for drive_letter in string.ascii_uppercase:
+                    drive_root = f"{drive_letter}:\\"
+                    if Path(drive_root).exists():
+                        recycle_bin_path = Path(f"{drive_root}$RECYCLE.BIN")
+                        if recycle_bin_path.exists() \
+                                and recycle_bin_path.is_dir():
+                            drives_checked.append(drive_letter)
+                            try:
+                                size = FileSystemTools._get_dir_size(
+                                    path=recycle_bin_path)
+                                total_size += size
+                            except Exception:
+                                continue
+
+            elif system == "Darwin":  # macOS (warning: untested)
+                trash_path = Path.home() / ".Trash"
+                if trash_path.exists():
+                    drives_checked.append("macOS_Trash")
+                    try:
+                        total_size = FileSystemTools._get_dir_size(trash_path)
+                    except Exception:
+                        pass
+
+            elif system == "Linux":  # (warning: untested)
+                trash_path =\
+                    Path.home() / ".local" / "share" / "Trash" / "files"
+                if trash_path.exists():
+                    drives_checked.append("Linux_Trash")
+                    try:
+                        total_size = FileSystemTools._get_dir_size(trash_path)
+                    except Exception:
+                        pass
+
+            status = "success" if len(drives_checked) > 0 \
+                else "no_recycle_bin_found"
+
+            return {
+                "total_size_bytes": total_size,
+                "size_gb": total_size / (1024 * 1024 * 1024),
+                "drives_checked": drives_checked,
+                "status": status,
             }
         except Exception as e:
             return {"error": str(e)}
