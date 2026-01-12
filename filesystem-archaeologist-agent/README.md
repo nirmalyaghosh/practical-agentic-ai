@@ -12,6 +12,8 @@ A multi-agent system for intelligent filesystem cleanup using agentic AI pattern
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue)]()
 [![Agentic](https://img.shields.io/badge/Agentic-Tool%20Orchestration%20-orange)]()
 
+ℹ️ **Personal Computer Only**: This multi-agent system is intended to be used for single user personal computers.
+
 ## Table of Contents
 
 - [What Is This?](#what-is-this)
@@ -103,6 +105,7 @@ An intelligent filesystem cleanup agent that uses **LLM-driven tool orchestratio
 - ✗ Fallback logic (pattern matching only when inference fails)
 - ✗ Reflection rules (hardcoded safety checks)
 - ✗ Orchestration plan (fixed workflow)
+- ✗ Required `target_path` specification (vs autonomous directory selection)
 - ✗ Prompts are prescriptive (step-by-step instructions, not strategic goals)
 
 👉 Refer to [Evolution Roadmap](#-evolution-roadmap) for planned implementation.
@@ -147,7 +150,8 @@ Changes Required:
 - [x] Convert classification from deterministic function to model-driven reasoning
 - [x] Maintain pattern matching as fallback for error cases
 - [x] Add session-based in-memory cache for LLM classifications (TTL 1hr) to avoid redundant LLM calls on repeated paths, thus reducing costs
-- [] Add persistent cache for LLM classifications (TTL 24hr, stored in DB) to avoid redundant LLM calls across multiple CLI sessions, maximizing cost savings
+- [ ] Add session-based in-memory cache for ReAct reasoning LLM calls in ReActAgent base class (*currently low priority since it is not safely cacheable due to conversation state dynamics*)
+- [ ] Add persistent cache for LLM classifications (TTL 24hr, stored in DB) to avoid redundant LLM calls across multiple CLI sessions, maximizing cost savings
 
 **2. Autonomous Reflection**
 - Current State: Rule-based safety checks (system paths, size thresholds)
@@ -169,13 +173,35 @@ Changes Required:
 - [ ] Add plan optimisation based on past workflow performance
 
 **4. Strategic Discovery**
-- Current State: Prescriptive prompts (step-by-step instructions)
-- Target State: Goal-oriented autonomous exploration
+- Current State: Prescriptive prompts (step-by-step instructions), required `target_path`
+- Target State: Goal-oriented autonomous exploration with optional `target_path` and hierarchical scanning
 
 Changes Required:
+- [ ] Make target_path optional in CLI for autonomous directory selection
+- [ ] Implement hierarchical scanning: baseline scan → priority determination → focused scanning
+- [ ] Add filesystem monitoring capabilities:
+  - `get_disk_usage()` tool for tracking free space trends
+  - `get_recycle_bin_stats()` tool for monitoring garbage accumulation
+  - `check_directory_changes()` tool for detecting growth patterns
+- [ ] Implement proactive trigger system using regression analysis:
+  - Monitor free space trends to predict when cleanup is needed
+  - Track recycle bin size as feedback on cleanup effectiveness
+  - Use simple regression or thresholds to determine scan timing
+- [ ] Add background monitoring mode: `fs-archaeologist monitor --background`
+- [ ] LLM integration for trigger decisions: "*Free space dropped 15% this month, suggesting cleanup of high-priority directories*"
+- [ ] Add LLM-driven directory prioritization using past cleanup patterns and filesystem metadata
 - [ ] Rewrite Scanner prompt to be strategic, not prescriptive
+  ```python
+  # Current (prescriptive)
+  "1. Scan directory 2. Find large items (>50MB) 3. ..."
+
+  # Target (strategic)
+  "Goal: Find high-value cleanup opportunities
+   Strategy is up to you. Consider efficiency vs thoroughness..."
+  ```
+- [ ] Add personal directory constants: `~/Desktop`, `~/Downloads`, `~/Documents`, `~/Pictures`, etc.
+- [ ] Implement learning from directory success rates and user preferences
 - [ ] Remove numbered steps from prompts
-- [ ] Let LLM develop its own discovery strategies
 
 **5. Subjective Judgment**
 - Current State: Binary decisions (safe/unsafe based on type)
