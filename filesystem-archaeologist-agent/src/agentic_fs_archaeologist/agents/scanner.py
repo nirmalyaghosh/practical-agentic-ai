@@ -52,6 +52,16 @@ class ScannerAgent(ReActAgent):
         else:
             return scanner_agent_prompt["system_prompt"]
 
+    async def _check_directory_changes(
+        self,
+        csv_file: str = "filesystem_monitor.csv"
+    ) -> Dict:
+        """
+        Async helper function used for directory change analysis.
+        """
+        logger.debug(f"Checking directory changes from {csv_file}")
+        return FileSystemTools.check_directory_changes(csv_file=csv_file)
+
     async def _compile_results(
         self,
         history: ReActHistory,
@@ -99,11 +109,28 @@ class ScannerAgent(ReActAgent):
             "total": n_findings,
         }
 
+    async def _get_disk_usage(self, path: str = "~") -> Dict:
+        """
+        Async helper function used for disk usage monitoring.
+        """
+        logger.debug(f"Getting disk usage for {path}")
+        return FileSystemTools.get_disk_usage(path=path)
+
+    async def _get_recycle_bin_stats(self) -> Dict:
+        """
+        Async helper function used for recycle bin statistics.
+        """
+        logger.debug("Getting recycle bin statistics")
+        return FileSystemTools.get_recycle_bin_stats()
+
     def _get_tools(self) -> Dict[str, Callable]:
         """
         Helper function used to get the tools available to the scanner agent.
         """
         return {
+            "get_disk_usage": self._get_disk_usage,
+            "get_recycle_bin_stats": self._get_recycle_bin_stats,
+            "check_directory_changes": self._check_directory_changes,
             "scan_directory": self._scan_directory,
             "analyse_directory": self._analyse_directory,
             "finish": self._finish,
