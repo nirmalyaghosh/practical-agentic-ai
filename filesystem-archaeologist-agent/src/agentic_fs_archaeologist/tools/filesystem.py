@@ -116,6 +116,26 @@ class FileSystemTools:
             return {"error": str(e)}
 
     @staticmethod
+    def _create_csv_snapshot(csv_file: str) -> bool:
+        """
+        Helper function used to create snapshot of the indicated CSV file.
+        The snapshot file is named with the current date.
+        Snapshot file(s) are used for historical comparison.
+        """
+        timestamp = datetime.now().strftime("%Y-%m-%d")
+        try:
+            logger.debug(f"Creating snapshot for CSV: {csv_file}")
+            csv_path = Path(csv_file)
+            backup_name = f"{csv_path.stem}_{timestamp}{csv_path.suffix}"
+            backup_path = csv_path.parent / backup_name
+            shutil.copy2(csv_file, backup_path)
+            logger.info(f"Created snapshot for {csv_file}: {backup_path}")
+        except Exception as e:
+            logger.error(f"Error creating snapshot: {str(e)}")
+            return False
+        return True
+
+    @staticmethod
     def check_git_status(path: str) -> Dict:
         """
         Helper function used to check if path is in a git repository
@@ -393,6 +413,8 @@ class FileSystemTools:
                 writer.writerow(col_names)
                 for p, ts, pri, sz in updated:
                     writer.writerow([p, ts.isoformat(), pri, sz])
+            # Create snapshot
+            FileSystemTools._create_csv_snapshot(csv_file=csv_file)
 
             return {
                 "scanned_paths": len(paths_found),
