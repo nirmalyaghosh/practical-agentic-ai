@@ -105,7 +105,6 @@ An intelligent filesystem cleanup agent that uses **LLM-driven tool orchestratio
 - ✗ Fallback logic (pattern matching only when inference fails)
 - ✗ Reflection rules (hardcoded safety checks)
 - ✗ Orchestration plan (fixed workflow)
-- ✗ Required `target_path` specification (vs autonomous directory selection)
 - ✗ Prompts are prescriptive (step-by-step instructions, not strategic goals)
 
 👉 Refer to [Evolution Roadmap](#-evolution-roadmap) for planned implementation.
@@ -173,11 +172,11 @@ Changes Required:
 - [ ] Add plan optimisation based on past workflow performance
 
 **4. Strategic Discovery**
-- Current State: Prescriptive prompts (step-by-step instructions), required `target_path`
+- Current State: Prescriptive prompts (step-by-step instructions), ~~required `target_path`~~
 - Target State: Goal-oriented autonomous exploration with optional `target_path` and hierarchical scanning
 
 Changes Required:
-- [ ] Make target_path optional in CLI for autonomous directory selection
+- [x] Make `target_path` optional in CLI for autonomous directory selection
 - [ ] Implement hierarchical scanning: baseline scan → priority determination → focused scanning
 - [x] Add filesystem monitoring capabilities:
   - `get_disk_usage()` tool for tracking free space trends ✓
@@ -300,6 +299,9 @@ pip install -e .
 # Scan a directory for cleanup opportunities
 python -m agentic_fs_archaeologist scan ~/Downloads
 
+# Autonomous scan (no target directory specified)
+python -m agentic_fs_archaeologist scan
+
 # Run complete workflow (scan → classify → review → validate)
 python -m agentic_fs_archaeologist cleanup ~/Downloads
 ```
@@ -352,6 +354,7 @@ for item in result.data["classifications"]:
 
 ## Version History
 
+- 0.2.3 (15 Jan 2026) : Make target_path optional in CLI for autonomous directory selection
 - 0.2.2 (14 Jan 2026) : Add filesystem monitoring capabilities
 - 0.2.1 (08 Jan 2026) : Add session-based in-memory cache for LLM classifications
 - 0.2.0 (07 Jan 2026) : Implement classification using LLM

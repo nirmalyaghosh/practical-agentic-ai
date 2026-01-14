@@ -171,7 +171,8 @@ def _persist_decisions_to_memory(
 
 @app.command()
 def scan(
-    path: str = typer.Argument(..., help="Path to scan for cleanup"),
+    path: str = typer.Option(None, help="Path to scan for cleanup "
+                             "(optional for autonomous mode)"),
     model: str = typer.Option(None, help="OpenAI model to use"),
 ):
     """
@@ -195,7 +196,10 @@ async def scan_async(path: str, model: str):
     """
 
     _echo_banner()
-    _echo_and_log(f"Scanning: {path}\n")
+    if path:
+        _echo_and_log(f"Scanning: {path}\n")
+    else:
+        _echo_and_log("Scanning autonomously (no target path specified)\n")
 
     # Initialize memory
     store = MemoryStore()
@@ -205,7 +209,10 @@ async def scan_async(path: str, model: str):
     orchestrator = OrchestratorAgent()
 
     # Create initial state
-    state = AgentState(context={"target_path": path})
+    context = {}
+    if path is not None:
+        context["target_path"] = path
+    state = AgentState(context=context)
 
     # Execute workflow
     result = await orchestrator.execute(state)
