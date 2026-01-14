@@ -179,10 +179,10 @@ Changes Required:
 Changes Required:
 - [ ] Make target_path optional in CLI for autonomous directory selection
 - [ ] Implement hierarchical scanning: baseline scan → priority determination → focused scanning
-- [ ] Add filesystem monitoring capabilities:
-  - `get_disk_usage()` tool for tracking free space trends
-  - `get_recycle_bin_stats()` tool for monitoring garbage accumulation
-  - `check_directory_changes()` tool for detecting growth patterns
+- [x] Add filesystem monitoring capabilities:
+  - `get_disk_usage()` tool for tracking free space trends ✓
+  - `get_recycle_bin_stats()` tool for monitoring garbage accumulation ✓
+  - `check_directory_changes()` tool for detecting growth patterns ✓
 - [ ] Implement proactive trigger system using regression analysis:
   - Monitor free space trends to predict when cleanup is needed
   - Track recycle bin size as feedback on cleanup effectiveness
@@ -248,7 +248,7 @@ filesystem-archaeologist-agent/
 │   │   ├── session.py
 │   │   └── workflow.py
 │   ├── tools/                     # Filesystem operations
-│   │   └── filesystem.py          # Scan, analyze, git status
+│   │   └── filesystem.py          # Scan, analyse, git status
 │   ├── hitl/                      # Human-in-the-loop
 │   │   └── approval_gate.py       # CLI approval
 │   ├── prompts/                   # Prompt management
@@ -352,6 +352,7 @@ for item in result.data["classifications"]:
 
 ## Version History
 
+- 0.2.2 (14 Jan 2026) : Add filesystem monitoring capabilities
 - 0.2.1 (08 Jan 2026) : Add session-based in-memory cache for LLM classifications
 - 0.2.0 (07 Jan 2026) : Implement classification using LLM
 - 0.1.0 (04 Jan 2026) : Inital version of the Filesystem Archaeologist Agent

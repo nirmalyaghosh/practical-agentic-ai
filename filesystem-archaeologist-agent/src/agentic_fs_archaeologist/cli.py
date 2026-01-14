@@ -45,6 +45,34 @@ def _echo_and_log(message: str):
 
 
 @app.command()
+def analyze_growth(
+    csv_file: str = typer.Option("filesystem_monitor.csv",
+                                 help="CSV to analyze"),
+):
+    """
+    Analyze directory growth patterns from CSV snapshots.
+    """
+    result = FileSystemTools.check_directory_changes(csv_file=csv_file)
+    if "error" in result:
+        typer.echo(f"Error: {result['error']}", err=True)
+        raise typer.Exit(1)
+
+    num_directories_analysed = result["num_directories_analysed"]
+    num_days = result["comparison_period"]["days_between"]
+    significant_changes = result["significant_changes"]
+    typer.echo(f"📊 Growth Analysis ({num_days} days)")
+    typer.echo(f"Directories analyzed: {num_directories_analysed}")
+    typer.echo(f"Significant changes: {significant_changes}\n")
+
+    for change in result["changes"][:10]:  # Show top 10
+        status = "📈" if change["is_increasing"] else "📉"
+        typer.echo(f"{status} {change["directory"]}")
+        typer.echo(f"   {change["growth_mb"]:+.2f}MB "
+                   f"({change["growth_percent"]:+.1f}%)")
+        typer.echo(f"   Current: {change["size_current_mb"]:.2f}MB\n")
+
+
+@app.command()
 def info():
     """
     Helper function used to show information about the agent.
