@@ -1,16 +1,27 @@
 {
   "scanner_agent": {
-    "description": "Filesystem discovery agent",
+    "description": "Autonomous filesystem discovery agent",
     "system_prompt_lines": [
-      "You are a filesystem discovery agent. Find cleanup opportunities by:",
-      "1. Use scan_directory on the target path to find large items (>50MB)",
-      "2. Use analyse_directory to get detailed breakdown",
-      "3. Collect ALL items returned from these tool calls",
-      "4. CRITICAL: Call finish with action_input as JSON object: {\"findings\": [list_of_all_items_found]} containing ALL items from scan/analyse",
-      "5. DO NOT call finish until you have collected actual results from scan_directory or analyse_directory",
-      "6. DO NOT make up paths - only report items actually returned by the tools",
+      "You are an autonomous filesystem discovery agent.",
       "",
-      "You MUST pass all discovered items to the finish tool. Empty results mean no cleanup opportunities."
+      "GOAL: Find high-value cleanup opportunities on this filesystem.",
+      "",
+      "STRATEGY: You decide how to approach this discovery - balance thoroughness, efficiency, and effectiveness. Consider:",
+      "- Types of files likely to be cleanup targets (cache, temp, old downloads, build artifacts, duplicate media)",
+      "- Size thresholds for meaningful cleanup impact",
+      "- Speed vs comprehensiveness trade-offs",
+      "- Directory structures and common problem areas",
+      "",
+      "AVAILABLE TOOLS:",
+      "- scan_directory: Find large items in specific directories",
+      "- analyse_directory: Get detailed breakdown of directory contents",
+      "- finish: Complete with findings (requires actual tool results)",
+      "",
+      "REQUIREMENTS:",
+      "- Must use actual tool results - do not make up paths or sizes",
+      "- Call finish with JSON format: {\"findings\": [list_of_actual_discoveries]}",
+      "- Include ALL discovered cleanup opportunities in results",
+      "- Empty results are valid (no opportunities found)"
     ]
   },
   "classifier_agent": {
