@@ -5,10 +5,12 @@ import shutil
 import string
 import time
 
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import (
     Dict,
+    List,
     Optional,
 )
 
@@ -116,6 +118,97 @@ class FileSystemTools:
             return {"error": str(e)}
 
     @staticmethod
+    def _calculate_growth_changes(
+            latest_sizes: Dict[str, int],
+            prev_sizes: Dict[str, int]) -> List[Dict]:
+        """
+        Helper function used to calculate growth metrics between two snapshots.
+        """
+        changes = []
+        all_dirs = set(latest_sizes.keys()) | set(prev_sizes.keys())
+
+        for dir_path in all_dirs:
+            latest_size = latest_sizes.get(dir_path, 0)
+            prev_size = prev_sizes.get(dir_path, 0)
+
+            if latest_size > 0 or prev_size > 0:  # Skip empty directories
+                abs_growth = latest_size - prev_size
+                rel_growth_percent = (abs_growth / prev_size * 100) \
+                    if prev_size > 0 else 0
+
+                changes.append({
+                    "directory": dir_path,
+                    "size_current_mb": round(latest_size / (1024**2), 2),
+                    "size_previous_mb": round(prev_size / (1024**2), 2),
+                    "growth_bytes": abs_growth,
+                    "growth_mb": round(abs_growth / (1024**2), 2),
+                    "growth_percent": round(rel_growth_percent, 1),
+                    "is_increasing": abs_growth > 0
+                })
+
+        return changes
+
+    @staticmethod
+    def check_directory_changes(
+            csv_file: str = "filesystem_monitor.csv") -> Dict:
+        """
+        Helper function used to analyze directory growth patterns based on the
+        snapshots of CSV files from previous monitoring runs.
+
+        This function compares current CSV with available snapshots to find
+        directories that have grown significantly since previous monitoring
+        runs.
+        """
+        try:
+            # Find available snapshot files
+            snapshots_info = FileSystemTools._get_snapshot_files(csv_file)
+            if len(snapshots_info) < 2:
+                return {"error": "Need at least 2 snapshots for comparison"}
+            logger.debug(f"Found {len(snapshots_info)} snapshots for analysis")
+
+            # Get the two most recent snapshots for comparison
+            sorted_snapshots = sorted(snapshots_info.keys(), reverse=True)
+            latest_ts = sorted_snapshots[0]
+            prev_ts = sorted_snapshots[1]
+            logger.debug(f"Comparing snapshots: {prev_ts} -> {latest_ts}")
+
+            # Load directory sizes for comparison (one snapshot at a time)
+            latest_dir_sizes = FileSystemTools._load_directory_sizes(
+                csv_filepath=snapshots_info[latest_ts]["file"])
+            prev_dir_sizes = FileSystemTools._load_directory_sizes(
+                csv_filepath=snapshots_info[prev_ts]["file"])
+
+            # Calculate growth changes
+            changes = FileSystemTools._calculate_growth_changes(
+                latest_dir_sizes, prev_dir_sizes)
+
+            # Sort and filter significant changes
+            significant_changes =\
+                FileSystemTools._filter_significant_changes(changes)
+
+            latest_ts_ts = snapshots_info[latest_ts]["timestamp"]
+            prev_ts_ts = snapshots_info[prev_ts]["timestamp"]
+            return {
+                "success": True,
+                "comparison_period": {
+                    "from_date": prev_ts_ts.isoformat(),
+                    "to_date": latest_ts_ts.isoformat(),
+                    "days_between": (latest_ts_ts - prev_ts_ts).days
+                },
+                "num_directories_analysed": len(set(latest_dir_sizes.keys()) |
+                                                set(prev_dir_sizes.keys())),
+                "significant_changes": len(significant_changes),
+                "changes": significant_changes[:20],  # Top 20
+                "snapshot_files_used": [
+                    snapshots_info[ts]["file"] for ts in [prev_ts, latest_ts]
+                ]
+            }
+
+        except Exception as e:
+            logger.error(f"Error analyzing directory changes: {str(e)}")
+            return {"error": str(e)}
+
+    @staticmethod
     def _create_csv_snapshot(csv_file: str) -> bool:
         """
         Helper function used to create snapshot of the indicated CSV file.
@@ -184,6 +277,36 @@ class FileSystemTools:
             "in_gitignore": in_gitignore,
             "path": str(target),
         }
+
+    @staticmethod
+    def _extract_timestamp_from_filename(filepath: Path) -> Optional[datetime]:
+        """
+        Helper function used to extract timestamp from snapshot filename.
+        """
+        try:
+            # Format: filesystem_monitor_2026-01-14.csv
+            date_str = filepath.stem.split('_')[-1]
+            return datetime.fromisoformat(date_str)
+        except (ValueError, IndexError):
+            # Fallback to file modification time
+            return datetime.fromtimestamp(filepath.stat().st_mtime)
+
+    @staticmethod
+    def _filter_significant_changes(changes: List[Dict]) -> List[Dict]:
+        """
+        Helper function used to filter and sort changes by significance.
+        """
+        # Only include directories with meaningful growth
+        significant = [
+            change for change in changes
+            if abs(change["growth_bytes"]) > 1024 * 1024 or  # >1MB absolute
+            abs(change["growth_percent"]) > 5  # >5% relative
+        ]
+
+        # Sort by absolute growth magnitude (largest changes first)
+        significant.sort(key=lambda x: abs(x["growth_bytes"]), reverse=True)
+
+        return significant
 
     @staticmethod
     def _get_dir_size(path: Path) -> int:
@@ -344,6 +467,43 @@ class FileSystemTools:
             return {"error": str(e)}
 
     @staticmethod
+    def _get_snapshot_files(
+            csv_file: str,
+            add_current: bool = False) -> Dict[datetime, Dict]:
+        """
+        Helper function used to find and organize available snapshot files.
+        """
+        csv_path = Path(csv_file)
+        if not csv_path.exists():
+            return {}
+
+        base_name = csv_path.stem
+        directory = csv_path.parent
+        pattern = f"{base_name}_*.csv"
+
+        snapshots = {}
+
+        # Add dated snapshots
+        for snapshot_file in directory.glob(pattern):
+            timestamp = FileSystemTools._extract_timestamp_from_filename(
+                filepath=snapshot_file)
+            if timestamp:
+                logger.debug(f"Found snapshot: {snapshot_file}")
+                snapshots[timestamp] = {
+                    "file": snapshot_file,
+                    "timestamp": timestamp
+                }
+
+        # Add current file if it exists
+        if add_current and csv_path.exists():
+            snapshots[datetime.now()] = {
+                "file": csv_path,
+                "timestamp": datetime.now()
+            }
+
+        return snapshots
+
+    @staticmethod
     def is_system_path(path: str) -> bool:
         """
         Helper function used to check if path is a system director.
@@ -355,6 +515,33 @@ class FileSystemTools:
                 "C:\\$RECYCLE.BIN"
             ))
         return False
+
+    @staticmethod
+    def _load_directory_sizes(csv_filepath: Path) -> Dict[str, int]:
+        """
+        Helper function used to load CSV and aggregate file sizes by directory.
+        """
+        dir_sizes = defaultdict(int)
+        total_files = 0
+
+        try:
+            with open(csv_filepath, "r", newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    try:
+                        path = row["path"]
+                        size_bytes = int(row.get("size_bytes", 0))
+
+                        # Aggregate by directory
+                        dir_path = str(Path(path).parent)
+                        dir_sizes[dir_path] += size_bytes
+                        total_files += 1
+                    except (ValueError, KeyError):
+                        continue
+        except Exception as e:
+            logger.warning(f"Error loading {csv_filepath}: {str(e)}")
+
+        return dict(dir_sizes)
 
     @staticmethod
     def monitor_filesystem(
