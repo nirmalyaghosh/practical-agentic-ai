@@ -8,7 +8,6 @@ from agentic_fs_archaeologist.app_logger import get_logger
 from agentic_fs_archaeologist.agents.base import ToolBasedAgent
 from agentic_fs_archaeologist.agents.exceptions import (
     InvalidActionError,
-    MaxIterationsExceeded,
 )
 from agentic_fs_archaeologist.models import (
     AgentState,
@@ -192,10 +191,11 @@ INVALID (will cause errors):
                 history.observations.append(observation)
 
             else:
-                # Loop completed without finishing
-                raise MaxIterationsExceeded(
-                    iterations=self.max_iterations,
-                    agent_name=self.__class__.__name__)
+                # Loop completed without finishing - compile partial results
+                logger.info(f"{self.__class__.__name__} "
+                            "reached max iterations "
+                            f"({self.max_iterations}). "
+                            "Proceeding with partial results.")
 
             # Compile final results
             return await self._compile_results(history, state)
