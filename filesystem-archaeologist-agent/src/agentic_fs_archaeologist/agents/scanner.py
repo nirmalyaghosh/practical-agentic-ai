@@ -88,6 +88,14 @@ class ScannerAgent(ReActAgent):
             metadata={"total_opportunities": len(findings)}
         )
 
+    async def _extract_paths_from_scan(self, scan_result: Dict) -> List[str]:
+        """
+        Helper function used to extract paths from scan_directory result
+        """
+        if "items" not in scan_result:
+            return []
+        return [item["path"] for item in scan_result["items"]]
+
     async def _finish(
         self,
         findings: Optional[List] = None,
@@ -133,6 +141,7 @@ class ScannerAgent(ReActAgent):
             "check_directory_changes": self._check_directory_changes,
             "scan_directory": self._scan_directory,
             "analyse_directory": self._analyse_directory,
+            "update_scanned_paths": self._update_scanned_paths,
             "finish": self._finish,
         }
 
@@ -149,3 +158,11 @@ class ScannerAgent(ReActAgent):
             path=path,
             depth=depth,
             min_size_mb=min_size_mb)
+
+    async def _update_scanned_paths(self, paths: List[str]) -> Dict:
+        """
+        Async helper function used to update CSV to mark paths as visited
+        """
+        return FileSystemTools.update_scanned_paths(
+            csv_file="filesystem_monitor.csv",
+            paths=paths)

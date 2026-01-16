@@ -693,3 +693,55 @@ class FileSystemTools:
 
         except Exception as e:
             return {"error": str(e)}
+
+    @staticmethod
+    def update_scanned_paths(
+            paths: List[str],
+            csv_file: str = "filesystem_monitor.csv") -> Dict:
+        """
+        Helper function used to efficiently update `last_visited` timestamps
+        for specified paths.
+
+        It only loads/updates the affected entries to minimize I/O.
+        """
+
+        if not os.path.exists(csv_file):
+            return {"error": f"CSV file {csv_file} not found"}
+
+        current_time = datetime.now().isoformat()
+        updated_count = 0
+
+        # Normalize input paths to the same format as CSV
+        # (backslashes on Windows)
+        normalized_input_paths =\
+            {str(Path(p).expanduser().resolve()) for p in paths}
+
+        # Read existing CSV and collect entries to update
+        entries = []
+        with open(csv_file, "r", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                csv_path_normalized =\
+                    str(Path(row["path"]).expanduser().resolve())
+                if csv_path_normalized in normalized_input_paths:
+                    row["last_visited"] = current_time
+                    updated_count += 1
+                    logger.debug(f"Updated last_visited for {row['path']}")
+                entries.append(row)
+
+        # Write back if any updates were made
+        if updated_count > 0:
+            with open(csv_file, "w", newline="", encoding="utf-8") as f:
+                if entries:
+                    writer = csv.DictWriter(f, fieldnames=entries[0].keys())
+                    writer.writeheader()
+                    writer.writerows(entries)
+
+            # Create snapshot as done in monitor_filesystem
+            FileSystemTools._create_csv_snapshot(csv_file)
+
+        return {
+            "updated_count": updated_count,
+            "total_scanned": len(paths),
+            "current_time": current_time
+        }
