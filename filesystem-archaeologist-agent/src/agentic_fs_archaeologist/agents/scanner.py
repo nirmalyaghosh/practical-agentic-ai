@@ -33,6 +33,10 @@ class ScannerAgent(ReActAgent):
     - Size thresholds (>1GB) and patterns hardcoded in prompt
     """
 
+    def __init__(self):
+        super().__init__()
+        self.findings = []  # Accumulate partial results
+
     async def _analyse_directory(
             self, path: str, depth: Optional[int] = None) -> Dict:
         """
@@ -154,10 +158,21 @@ class ScannerAgent(ReActAgent):
         Helper function used to scan directory wrapper.
         """
         logger.debug(f"Scanning directory {path} with depth {depth}")
-        return FileSystemTools.scan_directory(
+
+        result = FileSystemTools.scan_directory(
             path=path,
             depth=depth,
             min_size_mb=min_size_mb)
+
+        # Accumulate findings as discovered
+        if "items" in result:
+            self.findings.extend(result["items"])
+            # Auto-update CSV with discovered paths
+            paths_found = [item["path"] for item in result["items"]]
+            if paths_found:
+                await self._update_scanned_paths(paths_found)
+
+        return result
 
     async def _update_scanned_paths(self, paths: List[str]) -> Dict:
         """
