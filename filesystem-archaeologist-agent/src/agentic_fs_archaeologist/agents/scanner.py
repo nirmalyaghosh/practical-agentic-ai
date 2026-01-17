@@ -144,6 +144,8 @@ class ScannerAgent(ReActAgent):
             "get_recycle_bin_stats": self._get_recycle_bin_stats,
             "check_directory_changes": self._check_directory_changes,
             "scan_directory": self._scan_directory,
+            "select_random_unvisited_directory":
+            self._select_random_unvisited_directory,
             "analyse_directory": self._analyse_directory,
             "update_scanned_paths": self._update_scanned_paths,
             "finish": self._finish,
@@ -173,6 +175,14 @@ class ScannerAgent(ReActAgent):
                 await self._update_scanned_paths(paths_found)
 
         return result
+
+    async def _select_random_unvisited_directory(self) -> Dict:
+        """
+        Async helper function used to select a random unvisited directory
+        from the CSV.
+        """
+        return FileSystemTools.select_random_unvisited_directory(
+            csv_file="filesystem_monitor.csv")
 
     async def _update_scanned_paths(self, paths: List[str]) -> Dict:
         """

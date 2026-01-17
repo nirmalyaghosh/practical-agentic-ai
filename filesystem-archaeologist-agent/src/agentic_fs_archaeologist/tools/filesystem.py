@@ -1,14 +1,19 @@
 import csv
 import os
 import platform
+import random
 import shutil
 import string
 import time
 
 from collections import defaultdict
-from datetime import datetime
+from datetime import (
+    datetime,
+    timedelta,
+)
 from pathlib import Path
 from typing import (
+    Any,
     Dict,
     List,
     Optional,
@@ -692,6 +697,103 @@ class FileSystemTools:
             }
 
         except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    def select_random_unvisited_directory(
+        csv_file: str = "filesystem_monitor.csv",
+        days_threshold: int = 15,
+        min_file_size_mb: float = 5.0
+    ) -> Dict:
+        """
+        Helper function used to select a random directory that has not been
+        visited recently and contains large files.
+
+        Args:
+            csv_file: Path to filesystem monitor CSV
+            days_threshold: Days since last visit to consider "unvisited"
+            min_file_size_mb: Minimum file size in MB to qualify
+
+        Returns:
+            Dict with selected directory path or error
+        """
+        try:
+            if not os.path.exists(csv_file):
+                return {"error": f"CSV file {csv_file} not found"}
+
+            # Calculate threshold date
+            threshold_date = datetime.now() - timedelta(days=days_threshold)
+            min_file_size_bytes = min_file_size_mb * 1024 * 1024
+
+            # Group files by directory and track visit dates and large files
+            dir_candidates: Dict[str, Dict[str, Any]] = {}
+
+            with open(csv_file, "r", newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    try:
+                        path = row["path"]
+                        last_visited =\
+                            datetime.fromisoformat(row["last_visited"])
+                        size_bytes = int(row.get("size_bytes", 0))
+
+                        # Get directory (parent of file)
+                        dir_path = str(Path(path).parent)
+
+                        # Update directory last visit (keep most recent)
+                        if dir_path not in dir_candidates:
+                            dir_candidates[dir_path] = {
+                                "last_visit": None,
+                                "has_large_files": False,
+                                "large_file_count": 0
+                            }
+
+                        # Update directory last visit (keep most recent)
+                        dir_lv = dir_candidates[dir_path]["last_visit"]
+                        if (dir_lv is None or last_visited > dir_lv):
+                            dir_candidates[dir_path]["last_visit"] =\
+                                last_visited
+
+                        # Check if file qualifies as "large"
+                        if size_bytes >= min_file_size_bytes:
+                            dir_candidates[dir_path]["has_large_files"] = True
+                            dir_candidates[dir_path]["large_file_count"] += 1
+
+                    except (ValueError, KeyError):
+                        continue
+
+            # Filter candidates: not visited recently AND has large files
+            eligible_dirs = [
+                dir_path for dir_path, data in dir_candidates.items()
+                if (data["last_visit"] is None
+                    or data["last_visit"] < threshold_date)
+                and data["has_large_files"]
+            ]
+
+            if not eligible_dirs:
+                # Fallback to home directory
+                logger.info("No eligible unvisited directories found,"
+                            "falling back to home")
+                return {"selected_directory": str(Path.home())}
+
+            # Random selection
+            selected = random.choice(eligible_dirs)
+            logger.info(f"Selected random unvisited directory: {selected}")
+
+            # Mark the selected directory as visited immediately
+            FileSystemTools.update_scanned_paths(paths=[selected], csv_file=csv_file)
+            logger.info(f"Marked selected directory as visited: {selected}")
+
+            return {
+                "selected_directory": selected,
+                "total_candidates": len(eligible_dirs),
+                "days_threshold": days_threshold,
+                "min_file_size_mb": min_file_size_mb,
+                "marked_visited": True
+            }
+
+        except Exception as e:
+            logger.error(f"Error selecting random directory: {str(e)}")
             return {"error": str(e)}
 
     @staticmethod
