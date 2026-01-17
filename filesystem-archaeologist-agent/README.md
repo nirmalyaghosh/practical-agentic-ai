@@ -46,7 +46,7 @@ An intelligent filesystem cleanup agent that uses **LLM-driven tool orchestratio
         ▼            ▼            ▼
    ┌─────────┐  ┌────────────┐  ┌────────────┐
    │ SCANNER │  │ CLASSIFIER │  │ REFLECTION │
-   │  (@@)   │  │    (@@)    │  │  (Rules) ─ │
+   │  (@@)   │  │    (@@)    │  │    (@@) ─  │
    │  ReAct  │  │ ReAct+Mem  │  │ Not Agentic│
    └─────────┘  └────────────┘  └────────────┘
         │            │            │
@@ -82,10 +82,11 @@ An intelligent filesystem cleanup agent that uses **LLM-driven tool orchestratio
   - What is agentic: LLM decides which classification tools to call, when to call them, AND makes safety decisions through contextual reasoning
   - What is not: Fallback pattern matching (used only for error recovery)
 
-**❌ Reflection Agent**
-- **Currently rule-based**
-  - Reason: the current implementation uses 4 hardcoded validation checks
-  - Stage 2 will add LLM-based self-critique
+**🚀 Reflection Agent (Phase 2 Approved)**
+- **Current State**: Rule-based safety checks (4 hardcoded validations) - stable MVP baseline
+- **Target State**: ✅ LLM-driven self-critique with 9 specialized tools + ReAct pattern (~65% agentic)
+- **Evolution Strategy**: Autonomous Reflection with contextual reasoning and learning
+- **Agentic Capabilities**: Tool orchestration + iterative improvement + performance learning
 
 **✅ Validator Agent**
 - **Non-Agentic by Design**
@@ -157,9 +158,22 @@ Changes Required:
 - Target State: LLM self-critique and error detection
 
 Changes Required:
+- [ ] Implement new information gathering tools (in `tools/reflection_tools.py`) to be used by the `ReflectionAgent`:
+  - `check_file_dependencies(path)` - Analyze runtime/process dependencies
+  - `get_file_metadata(path)` - Extended attributes (ownership, versions, content type)
+  - `search_related_patterns(criteria)` - Query past classification decisions
+- [ ] Implement new action tools (in `tools/reflection_tools.py`) to be used by the `ReflectionAgent`:
+  - `downgrade_confidence(path, level, reasoning)` - Apply confidence adjustments
+  - `add_safety_risk(path, description, severity)` - Flag novel risks
+  - `trigger_reclassification(path, context)` - Queue items for re-classification
+- [ ] Implement new learning tools (in `tools/reflection_tools.py`) to be used by the `ReflectionAgent`:
+  - `query_reflection_history(path_pattern)` - Learn from past reflection decisions
+  - `store_reflection_outcome(path, decision, accuracy_later_confirmed)` - Record reflection performance
+  - `analyze_reflection_accuracy_metrics()` - Continuous improvement tracking
 - [ ] Implement reflection prompt to use an LLM to do the self-critique
 - [ ] Replace `ReflectionAgent` rules with LLM self-critique
-- [ ] Add iteration: Reflection → Re-classification if issues found
+- [ ] Add iteration: Reflection → Re-classification → Reflection² workflow
+- [ ] Add safety mechanisms: max iteration limits (2-3 rounds), convergence criteria, escalation path
 - [ ] Keep system path protection as non-negotiable validation (separate from reflection)
 
 **3. Adaptive Orchestration**
