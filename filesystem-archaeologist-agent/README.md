@@ -158,14 +158,14 @@ Changes Required:
 - Target State: LLM self-critique and error detection
 
 Changes Required:
-- [ ] Implement new information gathering tools (in `tools/reflection_tools.py`) to be used by the `ReflectionAgent`:
-  - `check_file_dependencies(path)` - Analyze runtime/process dependencies
-  - `get_file_metadata(path)` - Extended attributes (ownership, versions, content type)
-  - `search_related_patterns(criteria)` - Query past classification decisions
-- [ ] Implement new action tools (in `tools/reflection_tools.py`) to be used by the `ReflectionAgent`:
-  - `downgrade_confidence(path, level, reasoning)` - Apply confidence adjustments
-  - `add_safety_risk(path, description, severity)` - Flag novel risks
-  - `trigger_reclassification(path, context)` - Queue items for re-classification
+- [x] Implement new information gathering tools (in `tools/reflection_tools.py`) to be used by the `ReflectionAgent`:
+  - `check_file_dependencies(path)` - Analyze runtime/process dependencies ✓
+  - `get_file_metadata(path)` - Extended attributes (ownership, versions, content type) ✓
+  - `search_related_patterns(criteria)` - Query past classification decisions) ✓
+- [x] Implement new action tools (in `tools/reflection_tools.py`) to be used by the `ReflectionAgent`:
+  - `downgrade_confidence(path, level, reasoning)` - Apply confidence adjustments ✓
+  - `add_safety_risk(path, description, severity)` - Flag novel risks ✓
+  - `trigger_reclassification(path, context)` - Queue items for re-classification ✓
 - [ ] Implement new learning tools (in `tools/reflection_tools.py`) to be used by the `ReflectionAgent`:
   - `query_reflection_history(path_pattern)` - Learn from past reflection decisions
   - `store_reflection_outcome(path, decision, accuracy_later_confirmed)` - Record reflection performance
@@ -257,11 +257,13 @@ filesystem-archaeologist-agent/
 │   │   ├── classification.py
 │   │   ├── filesystem.py
 │   │   ├── memory.py
+│   │   ├── reflection.py
 │   │   ├── safety.py
 │   │   ├── session.py
 │   │   └── workflow.py
 │   ├── tools/                     # Filesystem operations
 │   │   └── filesystem.py          # Scan, analyse, git status
+│   │   └── reflection_tools.py    # For autonomous reflection
 │   ├── hitl/                      # Human-in-the-loop
 │   │   └── approval_gate.py       # CLI approval
 │   ├── prompts/                   # Prompt management
@@ -368,6 +370,7 @@ for item in result.data["classifications"]:
 
 ## Version History
 
+- 0.2.4 (18 Jan 2026) : Add tools to be used for autonomous reflection
 - 0.2.3 (15 Jan 2026) : Make target_path optional in CLI for autonomous directory selection
 - 0.2.2 (14 Jan 2026) : Add filesystem monitoring capabilities
 - 0.2.1 (08 Jan 2026) : Add session-based in-memory cache for LLM classifications

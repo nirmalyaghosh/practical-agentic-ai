@@ -1,6 +1,6 @@
 [project]
 name = "agentic-fs-archaeologist"
-version = "0.2.3"
+version = "0.2.4"
 description = "Multi-pattern agentic system for safe filesystem cleanup using ReAct, HITL, and Memory"
 readme = "README.md"
 requires-python = ">=3.12"
