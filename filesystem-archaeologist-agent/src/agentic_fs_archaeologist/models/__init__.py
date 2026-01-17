@@ -59,6 +59,12 @@ from agentic_fs_archaeologist.models.memory import (
     MemoryEntry,
 )
 
+# Reflection models
+from agentic_fs_archaeologist.models.reflection import (
+    ReflectionOutcome,
+    ReflectionMetrics,
+)
+
 # Safety models
 from agentic_fs_archaeologist.models.safety import (
     SafetyCheck,
@@ -86,6 +92,9 @@ __all__ = [
     # Workflow
     "PlanStep",
     "ExecutionPlan",
+    # Reflection
+    "ReflectionOutcome",
+    "ReflectionMetrics",
     # Session
     "UserDecision",
     "CleanupSession",
