@@ -233,6 +233,35 @@ class ReflectionTools:
             return {"error": str(e)}
 
     @staticmethod
+    def _map_confidence_string(confidence_str: str) -> DeletionConfidence:
+        """
+        Helper function used to map confidence strings from LLM to
+        `DeletionConfidence` enum values.
+
+        This mapping allows to deal with scenarios where confidence level
+        strings like "high", "medium" and "low" are returned by the LLM, which
+        differ from the expected enum values of `DeletionConfidence`,
+        namely "safe", "likely_safe", "uncertain", "unsafe".
+        """
+        confidence_mapping = {
+            "high": DeletionConfidence.SAFE,
+            "medium": DeletionConfidence.LIKELY_SAFE,
+            "low": DeletionConfidence.UNCERTAIN,
+            "safe": DeletionConfidence.SAFE,
+            "likely_safe": DeletionConfidence.LIKELY_SAFE,
+            "uncertain": DeletionConfidence.UNCERTAIN,
+            "unsafe": DeletionConfidence.UNSAFE
+        }
+
+        confidence_lower = confidence_str.lower().strip()
+        if confidence_lower in confidence_mapping:
+            return confidence_mapping[confidence_lower]
+        else:
+            l_k_str = list(confidence_mapping.keys())
+            raise ValueError(f"Invalid confidence value: {confidence_str}. "
+                             f"Valid values: {l_k_str}")
+
+    @staticmethod
     def query_reflection_history(
             path_pattern: str,
             memory_store: Optional[MemoryStore] = None) -> Dict:
@@ -340,13 +369,16 @@ class ReflectionTools:
         # Note: This is a deferred confirmation
         # and updated later when user actions provide ground truth
 
+        c_before = ReflectionTools._map_confidence_string(confidence_before)
+        c_after = ReflectionTools._map_confidence_string(confidence_after)
+
         outcome = ReflectionOutcome(
             path=Path(path),
             decision=decision,
             reasoning=reasoning,
             accuracy_confirmed=accuracy_confirmed,  # Confirmed later via HITL
-            confidence_before=DeletionConfidence(confidence_before),
-            confidence_after=DeletionConfidence(confidence_after),
+            confidence_before=c_before,
+            confidence_after=c_after,
             context={},  # Could be expanded with item metadata
             timestamp=datetime.now()
         )

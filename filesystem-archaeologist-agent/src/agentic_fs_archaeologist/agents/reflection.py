@@ -1,19 +1,30 @@
 from pathlib import Path
-from typing import List
+from typing import (
+    Callable,
+    Dict,
+    List,
+)
 
-from agentic_fs_archaeologist.agents.base import BaseAgent
+from agentic_fs_archaeologist.agents.react_agent import ReActAgent
+from agentic_fs_archaeologist.memory import (
+    MemoryRetrieval,
+    MemoryStore,
+)
+from agentic_fs_archaeologist.utils.file_utils import format_file_size
+from agentic_fs_archaeologist.tools.reflection_tools import ReflectionTools
 from agentic_fs_archaeologist.models import (
     AgentResult,
     AgentState,
     ReflectionCritique,
-    DeletionConfidence,
+    ReActHistory,
 )
 
 
-class ReflectionAgent(BaseAgent):
+class ReflectionAgent(ReActAgent):
     """
-    A reflection agent that reviews classifications for errors.
-    The current implementation uses rule-based checks.
+    An autonomous reflection agent that reviews classifications for errors.
+    It uses LLM self-critique with specialized tools + learning from past
+    decisions.
     """
 
     # System paths that should never be deleted
@@ -57,95 +68,143 @@ class ReflectionAgent(BaseAgent):
         ".img",  # Disk images
     ]
 
-    async def execute(self, state: AgentState) -> AgentResult:
-        """
-        Execute reflection by reviewing classifications.
+    def __init__(self):
+        super().__init__()
+        # Create shared memory once in constructor
+        self.memory_store = MemoryStore()
+        self.memory_retrieval = MemoryRetrieval(self.memory_store)
 
-        Args:
-            state: Current agent state with classifications
+    async def _add_safety_risk(
+            self,
+            path: str,
+            description: str,
+            severity: str) -> Dict:
+        return ReflectionTools.add_safety_risk(
+            path=path,
+            description=description,
+            severity=severity)
 
-        Returns:
-            AgentResult with critiques and classifications
+    async def _analyse_reflection_accuracy_metrics(self) -> Dict:
+        return ReflectionTools.analyse_reflection_accuracy_metrics(
+            memory_store=self.memory_store)
+
+    async def _check_file_dependencies(self, path: str) -> Dict:
+        return ReflectionTools.check_file_dependencies(path)
+
+    async def _compile_results(
+        self,
+        history: ReActHistory,
+        state: AgentState
+    ) -> AgentResult:
         """
-        classifications = state.classifications
+        Helper function used to compile ReAct history into final reflection
+        results.
+        """
+        # Extract all critiques from tool calls
         critiques: List[ReflectionCritique] = []
 
-        for classification in classifications:
-            issues = []
-            additional_risks = []
-            suggested_confidence = None
+        for observation in history.observations:
+            if observation.result and "critiques" in observation.result:
+                critiques.extend(observation.result["critiques"])
 
-            # Check 1: System path detection
-            if self._is_system_path(classification.path):
-                issues.append("System path detected - marking as UNSAFE")
-                additional_risks.append("Critical system file or directory")
-                suggested_confidence = DeletionConfidence.UNSAFE
+        # Apply any critiques to the classifications
+        for critique in critiques:
+            # Find and modify the matching classification
+            matching_cls = next(
+                (cls for cls in state.classifications
+                 if cls.path == Path(critique.classification_path)),
+                None
+            )
+            if matching_cls and critique.suggested_confidence:
+                matching_cls.confidence = critique.suggested_confidence
+                matching_cls.risks.extend(critique.additional_risks)
 
-            # Check 2: Overconfidence on very large items (>10GB)
-            if classification.confidence == DeletionConfidence.SAFE:
-                if classification.estimated_savings_bytes > 10 * 1024**3:
-                    s = "Very large item (>10GB) marked as SAFE - downgrading"
-                    issues.append(s)
-                    r = "Large size warrants extra caution"
-                    additional_risks.append(r)
-                    suggested_confidence = DeletionConfidence.LIKELY_SAFE
-
-            # Check 3: Important user directories
-            # Exception: installers/archives in Downloads are
-            # cleanup candidates
-            if self._in_important_dir(classification.path):
-                if classification.confidence in [
-                    DeletionConfidence.SAFE,
-                    DeletionConfidence.LIKELY_SAFE
-                ]:
-                    # Do not downgrade installers/archives in Downloads
-                    if not self._is_cleanup_safe_file(classification.path):
-                        s = "Located in important user directory - downgrading"
-                        issues.append(s)
-                        r = "May contain personal or important files"
-                        additional_risks.append(r)
-                        suggested_confidence = DeletionConfidence.UNCERTAIN
-
-            # Check 4: Recently modified files marked as safe
-            # If reasoning mentions recent modification but still marked safe
-            if classification.confidence == DeletionConfidence.SAFE:
-                if "recent" in classification.reasoning.lower():
-                    s = "Recently modified but marked SAFE - needs review"
-                    issues.append(s)
-                    suggested_confidence = DeletionConfidence.LIKELY_SAFE
-
-            # If issues found, create critique and apply fixes
-            if issues:
-                critique = ReflectionCritique(
-                    classification_path=classification.path,
-                    issues_found=issues,
-                    suggested_confidence=suggested_confidence,
-                    additional_risks=additional_risks,
-                    should_review=True,
-                    critique_reasoning=" | ".join(issues)
-                )
-
-                # Apply critique - modify the classification
-                if suggested_confidence:
-                    classification.confidence = suggested_confidence
-
-                classification.risks.extend(additional_risks)
-
-                critiques.append(critique)
-
+        tools_used = list(self._get_tools().keys())
         return AgentResult(
             success=True,
             data={"critiques": critiques},
             reasoning=[
-                f"Reviewed {len(classifications)} classifications",
-                f"Found issues in {len(critiques)} items",
-                f"Modified {len(critiques)} confidence levels"
+                f"Reviewed {len(state.classifications)} classifications "
+                "using LLM self-critique",
+                f"Applied {len(critiques)} critiques "
+                "with enhanced safety reasoning",
+                "Used learning tools to inform "
+                f"{len([c for c in critiques if "learning"
+                        in c.critique_reasoning.lower()])} decisions"
             ],
             metadata={
-                "total_reviewed": len(classifications),
-                "issues_found": len(critiques)
+                "total_reviewed": len(state.classifications),
+                "critiques_applied": len(critiques),
+                "tools_used": tools_used,
+                "autonomous_reflection": True
             }
         )
+
+    async def _downgrade_confidence(
+            self,
+            path: str,
+            level: str,
+            reasoning: str) -> Dict:
+        return ReflectionTools.downgrade_confidence(path, level, reasoning)
+
+    def _finish_with_critiques(
+            self,
+            critiques: List[ReflectionCritique]) -> Dict:
+        """
+        Helper function used for the finish action that compiles critiques
+        into final result format.
+        """
+        return {"critiques": critiques}
+
+    def _format_context(self, state: AgentState) -> str:
+        """
+        Helper function used to include classifications in context.
+        It overrides the `_format_context` function of the `ReActAgent`.
+        """
+        parts = []
+
+        # Include basic context
+        for key, value in state.context.items():
+            parts.append(f"- {key}: {value}")
+
+        # Include classifications to review
+        if state.classifications:
+            n = len(state.classifications)
+            parts.append(f"\nClassifications to review ({n} total):")
+            # Show first 10
+            for i, item in enumerate(state.classifications[:10], 1):
+                size_str = format_file_size(item.estimated_savings_bytes)
+                parts.append(f"  {i}. {item.path} ({size_str}, "
+                             f"{item.recommendation.value}, "
+                             f"{item.confidence.value}) - "
+                             f"{item.reasoning[:100]}...")
+            if n > 10:
+                parts.append(f"  ... and {n - 10} more classifications")
+
+        return "\n".join(parts) if parts else "No context provided"
+
+    async def _get_file_metadata(self, path: str) -> Dict:
+        return ReflectionTools.get_file_metadata(path)
+
+    def _get_tools(self) -> Dict[str, Callable]:
+        """
+        Helper function used to get the tools available to the reflection
+        agent.
+        """
+
+        return {
+            "get_file_metadata": self._get_file_metadata,
+            "check_file_dependencies": self._check_file_dependencies,
+            "search_related_patterns": self._search_related_patterns,
+            "query_reflection_history": self._query_reflection_history,
+            "analyze_reflection_accuracy_metrics":
+            self._analyse_reflection_accuracy_metrics,
+            "downgrade_confidence": self._downgrade_confidence,
+            "add_safety_risk": self._add_safety_risk,
+            "store_reflection_outcome": self._store_reflection_outcome,
+            "trigger_reclassification": self._trigger_reclassification,
+            "finish": self._finish_with_critiques
+        }
 
     def _in_important_dir(self, path: Path) -> bool:
         """
@@ -178,3 +237,36 @@ class ReflectionAgent(BaseAgent):
             if path_str.startswith(sys_path):
                 return True
         return False
+
+    async def _query_reflection_history(self, path_pattern: str) -> Dict:
+        return ReflectionTools.query_reflection_history(
+            path_pattern=path_pattern,
+            memory_store=self.memory_store)
+
+    async def _search_related_patterns(self, criteria: str) -> Dict:
+        return ReflectionTools.search_related_patterns(
+            criteria=criteria,
+            memory=self.memory_retrieval)
+
+    async def _store_reflection_outcome(
+            self,
+            path: str,
+            decision: str,
+            reasoning: str,
+            confidence_before: str,
+            confidence_after: str) -> Dict:
+        return ReflectionTools.store_reflection_outcome(
+            path=path,
+            decision=decision,
+            reasoning=reasoning,
+            confidence_before=confidence_before,
+            confidence_after=confidence_after,
+            memory_store=self.memory_store)
+
+    async def _trigger_reclassification(
+            self,
+            path: str,
+            context: str) -> Dict:
+        return ReflectionTools.trigger_reclassification(
+            path=path,
+            context=context)

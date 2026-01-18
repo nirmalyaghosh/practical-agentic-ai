@@ -46,8 +46,8 @@ An intelligent filesystem cleanup agent that uses **LLM-driven tool orchestratio
         ▼            ▼            ▼
    ┌─────────┐  ┌────────────┐  ┌────────────┐
    │ SCANNER │  │ CLASSIFIER │  │ REFLECTION │
-   │  (@@)   │  │    (@@)    │  │    (@@) ─  │
-   │  ReAct  │  │ ReAct+Mem  │  │ Not Agentic│
+   │  (@@)   │  │    (@@)    │  │    (@@)    │
+   │  ReAct  │  │ ReAct+Mem  │  │    ReAct   │
    └─────────┘  └────────────┘  └────────────┘
         │            │            │
         └────────────┼────────────┘
@@ -67,7 +67,7 @@ An intelligent filesystem cleanup agent that uses **LLM-driven tool orchestratio
 **✅ Scanner Agent**
 - Uses LLM-driven ReAct pattern for **tool selection**
 - Discovers cleanup opportunities through guided exploration
-- Follows prescriptive prompts to: scan directories, identify large items (>1GB), flag common patterns
+- Follows prescriptive prompts to: scan directories, identify large items (as configured using the environment variable `SCAN_MIN_SIZE_MB`), flag common patterns
 - **Currently partially Agentic**
   - What is agentic: LLM decides tool sequence and when to finish
   - What is not: Prompts provide step-by-step instructions; discovery strategy is scripted
@@ -82,11 +82,8 @@ An intelligent filesystem cleanup agent that uses **LLM-driven tool orchestratio
   - What is agentic: LLM decides which classification tools to call, when to call them, AND makes safety decisions through contextual reasoning
   - What is not: Fallback pattern matching (used only for error recovery)
 
-**🚀 Reflection Agent (Phase 2 Approved)**
-- **Current State**: Rule-based safety checks (4 hardcoded validations) - stable MVP baseline
-- **Target State**: ✅ LLM-driven self-critique with 9 specialized tools + ReAct pattern (~65% agentic)
-- **Evolution Strategy**: Autonomous Reflection with contextual reasoning and learning
-- **Agentic Capabilities**: Tool orchestration + iterative improvement + performance learning
+**✅ Reflection Agent**
+- Uses LLM-driven self-critique with 9 specialized tools + ReAct pattern (previously rule-based)
 
 **✅ Validator Agent**
 - **Non-Agentic by Design**
@@ -101,10 +98,10 @@ An intelligent filesystem cleanup agent that uses **LLM-driven tool orchestratio
 - ✓ Iteration control (LLM decides when exploration is complete)
 - ✓ Memory querying (LLM decides when to check past decisions)
 - ✓ Classification decisions (contextual reasoning about deletion safety)
+- ✓ Learning from reflection outcomes
 
 **Deterministic (Not Agentic)**:
 - ✗ Fallback logic (pattern matching only when inference fails)
-- ✗ Reflection rules (hardcoded safety checks)
 - ✗ Orchestration plan (fixed workflow)
 - ✗ Prompts are prescriptive (step-by-step instructions, not strategic goals)
 
@@ -128,10 +125,10 @@ An intelligent filesystem cleanup agent that uses **LLM-driven tool orchestratio
 - ✓ Multi-layer safety validation (Reflection + Validator + HITL)
 - ✓ Learning capability: User decisions saved for future reference
 - ✓ Autonomous directory selection for scans without target path
+- ✓ Reflection uses LLM self-critique
 
 **Intentional Boundaries**:
 - ✗ No actual deletion (approval workflow only)
-- ✗ Reflection uses rules (LLM-based self-critique in roadmap)
 - ✗ Fixed orchestration (adaptive planning in roadmap)
 
 **How Memory Works**:
@@ -155,10 +152,10 @@ Changes Required:
 - [ ] Add persistent cache for LLM classifications (TTL 24hr, stored in DB) to avoid redundant LLM calls across multiple CLI sessions, maximizing cost savings
 
 **2. Autonomous Reflection**
-- Current State: Rule-based safety checks (system paths, size thresholds)
-- Target State: LLM self-critique and error detection
+- ~~Current State: Rule-based safety checks (system paths, size thresholds)~~
+- **Implemented State**: LLM self-critique and error detection
 
-Changes Required:
+For MVP:
 - [x] Implement new information gathering tools (in `tools/reflection_tools.py`) to be used by the `ReflectionAgent`:
   - `check_file_dependencies(path)` - Analyze runtime/process dependencies ✓
   - `get_file_metadata(path)` - Extended attributes (ownership, versions, content type) ✓
@@ -171,8 +168,10 @@ Changes Required:
   - `query_reflection_history(path_pattern)` - Learn from past reflection decisions ✓
   - `store_reflection_outcome(path, decision, accuracy_later_confirmed)` - Record reflection performance ✓
   - `analyse_reflection_accuracy_metrics()` - Continuous improvement tracking ✓
-- [ ] Implement reflection prompt to use an LLM to do the self-critique
-- [ ] Replace `ReflectionAgent` rules with LLM self-critique
+- [x] Implement reflection prompt to use an LLM to do the self-critique
+- [x] Replace `ReflectionAgent` rules with LLM self-critique
+
+Changes Required (Post-MVP):
 - [ ] Add iteration: Reflection → Re-classification → Reflection² workflow
 - [ ] Add safety mechanisms: max iteration limits (2-3 rounds), convergence criteria, escalation path
 - [ ] Keep system path protection as non-negotiable validation (separate from reflection)
@@ -246,7 +245,7 @@ filesystem-archaeologist-agent/
 │   │   ├── plan_execute_agent.py  # Plan-Execute pattern base
 │   │   ├── scanner.py             # Discovery agent
 │   │   ├── classifier.py          # Classification agent
-│   │   ├── reflection.py          # Reflection agent (rule-based)
+│   │   ├── reflection.py          # Reflection agent (LLM-driven)
 │   │   ├── validator.py           # Validator agent (safety)
 │   │   ├── orchestrator.py        # Workflow coordinator
 │   │   └── exceptions.py          # Agent exceptions
@@ -372,6 +371,7 @@ for item in result.data["classifications"]:
 
 ## Version History
 
+- 0.3.0 (18 Jan 2026) : Implement autonomous reflection with proper context and tools
 - 0.2.5 (18 Jan 2026) : Implement autonomous directory selection using scan history (`select_random_unvisited_directory` tool)
 - 0.2.4 (18 Jan 2026) : Add tools to be used for autonomous reflection
 - 0.2.3 (15 Jan 2026) : Make target_path optional in CLI for autonomous directory selection
