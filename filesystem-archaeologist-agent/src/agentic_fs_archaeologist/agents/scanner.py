@@ -6,6 +6,7 @@ from typing import (
 )
 
 from agentic_fs_archaeologist.app_logger import get_logger
+from agentic_fs_archaeologist.config import get_settings
 from agentic_fs_archaeologist.prompts.prompts import load_prompts
 from agentic_fs_archaeologist.agents.react_agent import ReActAgent
 from agentic_fs_archaeologist.models import (
@@ -22,20 +23,13 @@ logger = get_logger(__name__)
 class ScannerAgent(ReActAgent):
     """
     Scanner (Discovery) agent that explores filesystem using ReAct pattern.
-
-    Agentic Aspects:
-    - LLM selects tools (scan_directory, analyse_directory, finish)
-    - LLM decides when exploration is complete
-
-    Non-Agentic Aspects:
-    - Follows prescriptive prompt with step-by-step instructions
-    - Discovery strategy is guided, not autonomous
-    - Size thresholds (>1GB) and patterns hardcoded in prompt
     """
 
     def __init__(self):
         super().__init__()
         self.findings = []  # Accumulate partial results
+        settings = get_settings()
+        self.scan_threshold_mb = settings.scan_min_size_mb
 
     async def _analyse_directory(
             self, path: str, depth: Optional[int] = None) -> Dict:
@@ -52,9 +46,14 @@ class ScannerAgent(ReActAgent):
         prompts = load_prompts(prompt_json_file_path=None)
         scanner_agent_prompt = prompts["scanner_agent"]
         if "system_prompt_lines" in scanner_agent_prompt:
-            return "\n".join(scanner_agent_prompt["system_prompt_lines"])
+            lines = scanner_agent_prompt["system_prompt_lines"]
+            prompt_text = "\n".join(lines)
+            prompt_text = prompt_text.replace(">1GB",
+                                              f">{self.scan_threshold_mb}MB")
         else:
-            return scanner_agent_prompt["system_prompt"]
+            prompt_text = scanner_agent_prompt["system_prompt"]
+
+        return prompt_text
 
     async def _check_directory_changes(
         self,
@@ -155,7 +154,6 @@ class ScannerAgent(ReActAgent):
     async def _scan_directory(
             self,
             path: str,
-            min_size_mb: float = 100,
             depth: int = 2) -> Dict:
         """
         Helper function used to scan directory wrapper.
@@ -165,7 +163,7 @@ class ScannerAgent(ReActAgent):
         result = FileSystemTools.scan_directory(
             path=path,
             depth=depth,
-            min_size_mb=min_size_mb)
+            min_size_mb=self.scan_threshold_mb)
 
         # Accumulate findings as discovered
         if "items" in result:

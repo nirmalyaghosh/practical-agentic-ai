@@ -31,6 +31,10 @@ class Settings():
     min_size_bytes: int = int(os.getenv("MIN_SIZE_BYTES",
                               default="1073741824"))  # 1GB
     min_age_days: int = int(os.getenv("MIN_AGE_DAYS", default="90"))
+    scan_min_size_mb: float = float(os.getenv("SCAN_MIN_SIZE_MB",
+                                              default="25.0"))
+    selection_min_size_mb: float = float(os.getenv("SELECTION_MIN_SIZE_MB",
+                                                   default="5.0"))
 
     # Safety Configuration
     enable_reflection: bool = bool(os.getenv("ENABLE_REFLECTION",

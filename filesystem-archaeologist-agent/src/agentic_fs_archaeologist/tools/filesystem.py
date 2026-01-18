@@ -21,6 +21,7 @@ from typing import (
 )
 
 from agentic_fs_archaeologist.app_logger import get_logger
+from agentic_fs_archaeologist.config import get_settings
 
 
 logger = get_logger(__name__)
@@ -704,7 +705,7 @@ class FileSystemTools:
     def select_random_unvisited_directory(
         csv_file: str = "filesystem_monitor.csv",
         days_threshold: int = 15,
-        min_file_size_mb: float = 5.0
+        min_file_size_mb: Optional[float] = None  # Make optional
     ) -> Dict:
         """
         Helper function used to select a random directory that has not been
@@ -721,6 +722,10 @@ class FileSystemTools:
         try:
             if not os.path.exists(csv_file):
                 return {"error": f"CSV file {csv_file} not found"}
+
+            settings = get_settings()
+            min_file_size_mb =\
+                min_file_size_mb or settings.selection_min_size_mb
 
             # Calculate threshold date
             threshold_date = datetime.now() - timedelta(days=days_threshold)
