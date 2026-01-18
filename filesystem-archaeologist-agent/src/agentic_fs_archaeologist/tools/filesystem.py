@@ -4,6 +4,7 @@ import platform
 import random
 import shutil
 import string
+import tempfile
 import time
 
 from collections import defaultdict
@@ -818,29 +819,42 @@ class FileSystemTools:
         normalized_input_paths =\
             {str(Path(p).expanduser().resolve()) for p in paths}
 
-        # Read existing CSV and collect entries to update
-        entries = []
-        with open(csv_file, "r", newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                csv_path_normalized =\
-                    str(Path(row["path"]).expanduser().resolve())
-                if csv_path_normalized in normalized_input_paths:
-                    row["last_visited"] = current_time
-                    updated_count += 1
-                    logger.debug(f"Updated last_visited for {row['path']}")
-                entries.append(row)
+        # Use temp file for streaming update
+        field_names = ["path", "last_visited", "priority", "size_bytes"]
+        with tempfile.NamedTemporaryFile(
+                mode="w",
+                delete=False,
+                newline="",
+                encoding="utf-8") as temp_f:
+            writer = None
+            with open(csv_file, "r", newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if writer is None:
+                        writer = csv.DictWriter(temp_f,
+                                                fieldnames=reader.fieldnames
+                                                or field_names)
+                        writer.writeheader()
 
-        # Write back if any updates were made
+                    csv_path_normalized =\
+                        str(Path(row["path"]).expanduser().resolve())
+                    if csv_path_normalized in normalized_input_paths:
+                        row["last_visited"] = current_time
+                        updated_count += 1
+                        logger.debug(f"Updated last_visited for {row['path']}")
+                    writer.writerow(row)
+
+        # Only replace if updates made
         if updated_count > 0:
-            with open(csv_file, "w", newline="", encoding="utf-8") as f:
-                if entries:
-                    writer = csv.DictWriter(f, fieldnames=entries[0].keys())
-                    writer.writeheader()
-                    writer.writerows(entries)
+            temp_f.close()
+            os.replace(temp_f.name, csv_file)
 
             # Create snapshot as done in monitor_filesystem
             FileSystemTools._create_csv_snapshot(csv_file)
+        else:
+            # Discard temp file
+            temp_f.close()
+            os.unlink(temp_f.name)
 
         return {
             "updated_count": updated_count,

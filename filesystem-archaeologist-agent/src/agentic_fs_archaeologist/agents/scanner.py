@@ -147,6 +147,7 @@ class ScannerAgent(ReActAgent):
             "select_random_unvisited_directory":
             self._select_random_unvisited_directory,
             "analyse_directory": self._analyse_directory,
+            "extract_paths_from_scan": self._extract_paths_from_scan,
             "update_scanned_paths": self._update_scanned_paths,
             "finish": self._finish,
         }
