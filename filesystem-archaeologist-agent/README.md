@@ -167,10 +167,10 @@ Changes Required:
   - `downgrade_confidence(path, level, reasoning)` - Apply confidence adjustments ✓
   - `add_safety_risk(path, description, severity)` - Flag novel risks ✓
   - `trigger_reclassification(path, context)` - Queue items for re-classification ✓
-- [ ] Implement new learning tools (in `tools/reflection_tools.py`) to be used by the `ReflectionAgent`:
-  - `query_reflection_history(path_pattern)` - Learn from past reflection decisions
-  - `store_reflection_outcome(path, decision, accuracy_later_confirmed)` - Record reflection performance
-  - `analyze_reflection_accuracy_metrics()` - Continuous improvement tracking
+- [x] Implement new learning tools (in `tools/reflection_tools.py`) to be used by the `ReflectionAgent`:
+  - `query_reflection_history(path_pattern)` - Learn from past reflection decisions ✓
+  - `store_reflection_outcome(path, decision, accuracy_later_confirmed)` - Record reflection performance ✓
+  - `analyse_reflection_accuracy_metrics()` - Continuous improvement tracking ✓
 - [ ] Implement reflection prompt to use an LLM to do the self-critique
 - [ ] Replace `ReflectionAgent` rules with LLM self-critique
 - [ ] Add iteration: Reflection → Re-classification → Reflection² workflow
