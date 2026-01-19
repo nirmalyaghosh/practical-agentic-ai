@@ -257,6 +257,10 @@ class ClassifierAgent(ReActAgent):
                                  "due to is_directory correction")
                     del self.session_cache[path]
 
+            if is_directory:
+                logger.debug(f"Skip classifying {path} since is a directory")
+                return {}
+
             # If size_bytes is 0 or missing, try to get it from filesystem
             if size_bytes == 0:
                 size_bytes = self._get_file_size(path=path)
@@ -300,14 +304,16 @@ class ClassifierAgent(ReActAgent):
 
             # Build the prompt
             prompts = load_prompts(prompt_json_file_path=None)
-            prompt_template = prompts["llm_classification"]["template"]
+            k = "single_file_prompt_lines"
+            prompt_lines = prompts["llm_classification"][k]
+            prompt_template = "\n".join(prompt_lines)
 
             item_type = "directory" if is_directory else "file"
             size_str = format_file_size(bytes_size=size_bytes)
 
             prompt = prompt_template.format(
                 path=path,
-                size_gb=size_str,
+                file_size=size_str,
                 age_days=age_days,
                 item_type=item_type,
                 memory_context=memory_context if memory_context else

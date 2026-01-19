@@ -57,7 +57,6 @@
       "1. Call get_items_to_classify() - this returns a dict with 'items' list and 'count'",
       "2. If count is 0, call finish([])",
       "3. If count > 0, FOR EACH item in the items list:",
-	  "   - Extract path, size_bytes, is_directory from the item",
       "   - Extract path, size_bytes, is_directory from the item",
       "   - Call classify_item_using_llm(path=..., size_bytes=..., is_directory=...)",
       "   - Store the classification result",
@@ -68,7 +67,30 @@
   },
   "llm_classification": {
     "description": "Contextual deletion safety analysis",
-    "template": "Analyse this filesystem item for deletion safety:\n\nPath: {path}\nSize: {size_gb}\nAge: {age_days} days\nType: {item_type}\n\nReason about deletion safety considering:\n1. Purpose - Is this system critical, cache, user data, or build artifacts?\n2. Dependencies - Could other files/processes depend on this?\n3. Recoverability - Can it be regenerated if deleted?\n4. Cleanup Value - Is this actually a cleanup opportunity (old installer, cache, temp files, etc.)?\n\n{memory_context}\n\nProvide your analysis as:\nRecommendation: [DELETE/REVIEW/KEEP] - Whether this is a cleanup opportunity\nCategory: [SAFE/LIKELY_SAFE/UNCERTAIN/UNSAFE] - Safety level if deleted\nConfidence: [HIGH/MEDIUM/LOW]\nReasoning: [Your detailed analysis including why it is/isn't a cleanup opportunity]"
+    "single_file_prompt_lines": [
+      "You are evaluating if a file is safe to delete on a personal computer.",
+      "",
+      "FILE INFORMATION:",
+      "Path: {path}",
+      "Size: {file_size}",
+      "Age: {age_days} days",
+      "Type: {item_type}",
+      "",
+      "{memory_context}",
+      "",
+      "Assess across these dimensions:",
+      "- Purpose: system/cache/personal/hobby",
+      "- Risk: dependencies, recoverability, irreplaceability",
+      "- Value: cleanup benefit vs. retention need",
+      "",
+      "Note: For personal files (like photos or videos), exercise additional caution even if they appear to be cleanup candidates.",
+      "",
+      "OUTPUT:",
+      "DECISION: [DELETE/KEEP/REVIEW]",
+      "SAFETY: [SAFE/LIKELY_SAFE/UNCERTAIN/UNSAFE]",
+      "CONFIDENCE: [HIGH/MEDIUM/LOW]",
+      "REASONING: [2-3 sentences covering purpose, risk, and value]"
+  ]
   },
   "reflection_agent": {
     "description": "LLM-driven self-critique with contextual reasoning and learning",
