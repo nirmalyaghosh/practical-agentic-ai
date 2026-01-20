@@ -55,6 +55,36 @@ class ClassifierAgent(ReActAgent):
         self.cache_ttl = settings.classifier_cache_ttl
         self.classifications = []  # Store intermediate results
 
+    def _build_react_prompt(
+            self,
+            state: AgentState,
+            history: ReActHistory) -> str:
+
+        # Build context from state using base class method
+        context_str = self._format_context(state=state)
+
+        # Build history using base class method
+        history_str = self._format_history(history=history)\
+            if history.thoughts else ""
+
+        # Get the JSON formatting rules
+        json_formatting_rules = self._get_json_formatting_rules()
+
+        tools_str = self._get_tool_descriptions()
+
+        prompts = load_prompts(prompt_json_file_path=None)
+        prompt_lines = prompts["classifier_agent"]["react_prompt_lines"]
+
+        template = "\n".join(prompt_lines)
+        formatted_prompt = template.format(
+            context_str=context_str,
+            history_str=history_str,
+            tools_str=tools_str,
+            json_formatting_rules=json_formatting_rules
+        )
+
+        return formatted_prompt
+
     def _build_system_prompt(self) -> str:
         prompts = load_prompts(prompt_json_file_path=None)
         classifier_agent_prompt = prompts["classifier_agent"]

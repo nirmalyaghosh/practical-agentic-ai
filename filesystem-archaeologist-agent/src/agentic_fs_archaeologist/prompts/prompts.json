@@ -1,6 +1,19 @@
 {
   "scanner_agent": {
     "description": "Autonomous filesystem discovery agent",
+    "react_prompt_lines": [
+      "CONTEXT:",
+      "{context_str}",
+      "",
+      "PREVIOUS REASONING:",
+      "{history_str}",
+      "",
+      "Based on the above, reason about what to do next. Think step-by-step.",
+      "",
+      "If you have enough information to finish, set should_continue to false. Otherwise, choose an action and provide the required inputs as a JSON string.",
+      "",
+      "{json_formatting_rules}"
+    ],
     "system_prompt_lines": [
       "You are an autonomous filesystem discovery agent.",
       "",
@@ -26,8 +39,6 @@
       "- When select_random_unvisited_directory returns a path, ALWAYS scan that directory first",
       "- After every scan_directory call, check if it found large files",
       "- If scan found no results, either select another directory (call select_random_unvisited_directory again) OR finish with empty results",
-      "- After calling scan_directory, call extract_paths_from_scan with the scan result",
-      "- Then call update_scanned_paths with the extracted paths",
       "",
       "AUTONOMOUS BEHAVIOUR:",
       "- Use intelligent directory selection to avoid rescanning recently visited areas",
@@ -50,6 +61,23 @@
   },
   "classifier_agent": {
     "description": "Filesystem classification with contextual reasoning",
+    "react_prompt_lines": [
+      "CONTEXT:",
+      "{context_str}",
+      "",
+      "Available Tools:",
+      "{tools_str}",
+      "",
+      "PREVIOUS REASONING:",
+      "{history_str}",
+      "",
+      "Based on the above, reason about what to do next in the file classification process. Think step-by-step.",
+      "",
+      "Consider the workflow requirements: ensure all discovered items are classified before finishing.",
+      "If you have enough information to finish, set should_continue to false. Otherwise, choose an action and provide the required inputs as a JSON string.",
+      "",
+      "{json_formatting_rules}"
+    ],
     "system_prompt_lines": [
       "You are a filesystem classification agent.",
       "",
@@ -94,6 +122,23 @@
   },
   "reflection_agent": {
     "description": "LLM-driven self-critique with contextual reasoning and learning",
+    "react_prompt_lines": [
+      "CONTEXT:",
+      "{context_str}",
+      "",
+      "Available Tools:",
+      "{tools_str}",
+      "",
+      "PREVIOUS REASONING:",
+      "{history_str}",
+      "",
+      "Based on the above, reason about what to do next in the reflection process. Think step-by-step.",
+      "",
+      "Consider the context of reviewing safety classifications and identifying potential errors.",
+      "If you have enough information to finish, set should_continue to false. Otherwise, choose an action and provide the required inputs as a JSON string.",
+      "",
+      "{json_formatting_rules}"
+    ],
     "system_prompt_lines": [
       "You are an autonomous reflection agent that reviews filesystem classifications for errors using deep contextual reasoning.",
       "",

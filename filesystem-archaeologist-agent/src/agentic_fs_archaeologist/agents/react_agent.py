@@ -400,6 +400,24 @@ INVALID (will cause errors):
 
         return "\n".join(parts)
 
+    def _get_json_formatting_lines(self) -> List[str]:
+        return [
+            "CRITICAL JSON FORMATTING RULES for action_input:",
+            "1. MUST be valid JSON - double quotes for keys & string values",
+            "2. NO trailing commas anywhere",
+            "3. NO empty strings followed by commas",
+            "4. For Windows paths, use forward slashes OR escape backslashes",
+            "5. Close all braces and brackets properly",
+            "",
+            "Valid Examples:",
+            '- Single param: \'{"path": "C:/Users/user/Downloads"}\'',
+            '- Multiple params: \'{"path": "/tmp", "size_bytes": 1000,'
+            ' "is_directory": true}\'',
+        ]
+
+    def _get_json_formatting_rules(self) -> str:
+        return "\n".join(self._get_json_formatting_lines())
+
     async def _get_thought(
         self,
         state: AgentState,

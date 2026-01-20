@@ -39,6 +39,35 @@ class ScannerAgent(ReActAgent):
         logger.debug(f"Analysing directory {path}")
         return FileSystemTools.analyse_directory(path=path, depth=depth)
 
+    def _build_react_prompt(
+            self,
+            state: AgentState,
+            history: ReActHistory) -> str:
+
+        # Build context from state using base class method
+        context_str = self._format_context(state=state)
+
+        # Build history using base class method
+        history_str = self._format_history(history=history)\
+            if history.thoughts else ""
+
+        # Get the JSON formatting rules
+        json_formatting_rules = self._get_json_formatting_rules()
+
+        prompts = load_prompts(prompt_json_file_path=None)
+        k = "react_prompt_lines"
+        prompt_lines = prompts["scanner_agent"].get(k, [])
+
+        # Join the lines and format the template
+        template = "\n".join(prompt_lines)
+        formatted_prompt = template.format(
+            context_str=context_str,
+            history_str=history_str,
+            json_formatting_rules=json_formatting_rules
+        )
+
+        return formatted_prompt
+
     def _build_system_prompt(self) -> str:
         """
         Helper function used to build system prompt for scanner agent.
@@ -146,8 +175,6 @@ class ScannerAgent(ReActAgent):
             "select_random_unvisited_directory":
             self._select_random_unvisited_directory,
             "analyse_directory": self._analyse_directory,
-            "extract_paths_from_scan": self._extract_paths_from_scan,
-            "update_scanned_paths": self._update_scanned_paths,
             "finish": self._finish,
         }
 
