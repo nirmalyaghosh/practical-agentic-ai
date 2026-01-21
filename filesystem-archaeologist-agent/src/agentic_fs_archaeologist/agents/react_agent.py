@@ -80,6 +80,19 @@ Based on the above, reason about what to do next. Think step-by-step.
 If you have enough information to finish, set should_continue to false.
 Otherwise, choose an action and provide the required inputs as a JSON string.
 
+You can execute single actions OR action sequences for efficiency:
+
+Single Action (legacy):
+{{"action": "scan_directory", "action_input": "{{\\"path\\": \\"/tmp\\"}}"}}
+
+Action Sequence (recommended for related operations):
+{{"actions": [
+  {{"action": "scan_directory", "action_input": "{{\\"path\\": \\"/tmp\\"}}"}},
+  {{"action": "analyse_directory", "action_input": "{{\\"path\\": \\"/tmp\\"}}"}}
+]}}
+
+Use sequences when multiple related tools should execute together.
+
 CRITICAL JSON FORMATTING RULES for action_input:
 1. MUST be valid JSON - use double quotes for keys and string values
 2. NO trailing commas anywhere
@@ -179,16 +192,77 @@ INVALID (will cause errors):
                     history.final_answer = thought.thought
                     break
 
-                # 3. Validate action exists
-                if thought.action not in self._get_tools():
-                    raise InvalidActionError(
-                        thought.action,
-                        list(self._get_tools().keys())
-                    )
+                # Batch Action Sequences optimisation
+                # Executes multiple related tools per reasoning step instead
+                # of one tool call per iteration. This will help to improve
+                # efficiency for agents like ScannerAgent that perform related
+                # operations
 
-                # 4. ACT - Execute the chosen action
-                observation = await self._execute_action(thought)
-                history.observations.append(observation)
+                # 3. ACT - Execute actions (single or batch)
+                if thought.actions:
+                    # Execute action sequence
+                    for action_spec in thought.actions:
+                        action_name = action_spec.get("action")
+                        action_input_json =\
+                            action_spec.get("action_input", "{}")
+
+                        if action_name is None \
+                                or action_name not in self._get_tools():
+                            available_actions = list(self._get_tools().keys())
+                            raise InvalidActionError(
+                                action=action_name,
+                                available_actions=available_actions)
+
+                        # Create temporary thought for this action
+                        temp_thought = ReActThought(
+                            thought=f"Executing {action_name} from batch",
+                            action=action_name,
+                            action_input=action_input_json,
+                            should_continue=True
+                        )
+
+                        try:
+                            observation = await self._execute_action(
+                                thought=temp_thought)
+                            history.observations.append(observation)
+                        except Exception as e:
+                            error_observation = ReActObservation(
+                                action=action_name,
+                                result={
+                                    "error":
+                                    f"Batch action failed: {str(e)}"
+                                },
+                                timestamp=datetime.now()
+                            )
+                            history.observations.append(error_observation)
+                            w = f"Batch action '{action_name}' failed: {e}"
+                            logger.warning(w)
+
+                elif thought.action and thought.action != "null":
+                    # Legacy single action execution
+                    if thought.action not in self._get_tools():
+                        raise InvalidActionError(
+                            thought.action,
+                            list(self._get_tools().keys())
+                        )
+
+                    try:
+                        observation = await self._execute_action(thought)
+                        history.observations.append(observation)
+                    except Exception as e:
+                        # Add error observation so ReAct can learn and adapt
+                        error_observation = ReActObservation(
+                            action=thought.action,
+                            result={
+                                "error": f"Tool execution failed: {str(e)}"
+                            },
+                            timestamp=datetime.now()
+                        )
+                        history.observations.append(error_observation)
+                        logger.warning(f"Tool '{thought.action}' failed: {e}")
+                        # Continue to next iteration
+                        # (so agent can try different approach)
+                        continue
 
             else:
                 # Loop completed without finishing - compile partial results
@@ -389,16 +463,55 @@ INVALID (will cause errors):
             return ""
 
         parts = []
-        thoughts_observations = zip(history.thoughts, history.observations)
-        for i, (thought, obs) in enumerate(thoughts_observations):
+        # Handle variable number of observations per thought
+        # due to batch actions
+        obs_idx = 0
+        for i, thought in enumerate(history.thoughts):
             parts.append(f"\nIteration {i+1}:")
             parts.append(f"  Thought: {thought.thought}")
-            if thought.action:
+
+            if thought.actions:
+                parts.append("  Action Sequence:")
+                for j, action_spec in enumerate(thought.actions):
+                    act_name = action_spec.get("action", "unknown")
+                    act_input = action_spec.get("action_input", "{}")
+                    parts.append(f"    {j+1}. {act_name}({act_input})")
+                    # Add observation if available
+                    if obs_idx < len(history.observations):
+                        obs = history.observations[obs_idx]
+                        parts.append(f"      Observation: {obs.result}")
+                        obs_idx += 1
+            elif thought.action:
                 act_str = f"  Action: {thought.action}({thought.action_input})"
                 parts.append(act_str)
-                parts.append(f"  Observation: {obs.result}")
+                # Add observation if available
+                if obs_idx < len(history.observations):
+                    obs = history.observations[obs_idx]
+                    parts.append(f"  Observation: {obs.result}")
+                    obs_idx += 1
 
         return "\n".join(parts)
+
+    def _get_action_or_actions_formatting_lines(self) -> List[str]:
+        return [
+            "You can execute single actions "
+            "OR action sequences for efficiency:",
+            "",
+            "Single Action:",
+            "{{\"action\": \"scan_directory\", "
+            "\"action_input\": \"{{\\\"path\\\": \\\"/tmp\\\"}}\"}}",
+            "",
+            "Action Sequence (recommended for related operations):",
+            "{{\"actions\": ["
+            "  {{\"action\": \"scan_directory\", "
+            "\"action_input\": \"{{\\\"path\\\": \\\"/tmp\\\"}}\"}},",
+            "  {{\"action\": \"analyse_directory\", "
+            "\"action_input\": \"{{\\\"path\\\": \\\"/tmp\\\"}}\"}}",
+            "]}}",
+        ]
+
+    def _get_action_or_actions_formatting(self) -> str:
+        return "\n".join(self._get_action_or_actions_formatting_lines())
 
     def _get_json_formatting_lines(self) -> List[str]:
         return [

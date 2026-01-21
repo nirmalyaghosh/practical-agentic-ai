@@ -24,7 +24,14 @@ logger = get_logger(__name__)
 
 class ScannerAgent(ReActAgent):
     """
-    Scanner (Discovery) agent that explores filesystem using ReAct pattern.
+    Scanner (Discovery) agent that explores filesystem using ReAct pattern
+    with batch action sequences.
+
+    Optimisations:
+    - Batch Action Sequences: Executes multiple related operations
+      per reasoning step
+    - Dynamic Tool Filtering: Only loads relevant tools based on current state
+    - Result Accumulation: Builds findings incrementally across operations
     """
 
     def __init__(self):
@@ -53,6 +60,9 @@ class ScannerAgent(ReActAgent):
         history_str = self._format_history(history=history)\
             if history.thoughts else ""
 
+        # Get action formatting rules
+        action_formatting_rules = self._get_action_or_actions_formatting()
+
         # Get the JSON formatting rules
         json_formatting_rules = self._get_json_formatting_rules()
 
@@ -65,6 +75,7 @@ class ScannerAgent(ReActAgent):
         formatted_prompt = template.format(
             context_str=context_str,
             history_str=history_str,
+            action_formatting_rules=action_formatting_rules,
             json_formatting_rules=json_formatting_rules
         )
 

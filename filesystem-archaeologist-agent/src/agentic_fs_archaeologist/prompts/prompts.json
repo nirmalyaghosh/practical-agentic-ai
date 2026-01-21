@@ -12,6 +12,8 @@
       "",
       "If you have enough information to finish, set should_continue to false. Otherwise, choose an action and provide the required inputs as a JSON string.",
       "",
+      "{action_formatting_rules}",
+      "",
       "{json_formatting_rules}"
     ],
     "system_prompt_lines": [

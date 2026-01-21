@@ -44,10 +44,17 @@ class AgentResult(BaseModel):
 class ReActThought(BaseModel):
     """
     Pydantic data model used for thoughts in the ReAct reasoning loop.
+
+    Supports both single actions (legacy) and action sequences for batch
+    execution.
+
+    Use `actions` for multiple actions in one reasoning step,
+    or `action` for single action.
     """
     thought: str
     action: Optional[str] = None
     action_input: Optional[str] = None
+    actions: Optional[List[Dict[str, str]]] = None
     should_continue: bool = True
 
 
