@@ -1,3 +1,5 @@
+import time
+
 from typing import (
     Callable,
     Dict,
@@ -154,7 +156,9 @@ class ScannerAgent(ReActAgent):
         Async helper function used for disk usage monitoring.
         """
         logger.debug(f"Getting disk usage for {path}")
-        return FileSystemTools.get_disk_usage(path=path)
+        disk_usage = FileSystemTools.get_disk_usage(path=path)
+        self._monitoring_data_collected = time.time()
+        return disk_usage
 
     async def _get_recycle_bin_stats(self) -> Dict:
         """
@@ -166,17 +170,60 @@ class ScannerAgent(ReActAgent):
     def _get_tools(self) -> Dict[str, Callable]:
         """
         Helper function used to get the tools available to the scanner agent.
+        This function will dynamically filter tools based on execution state
+        to optimise agent performance:
+        - Base tools always available for core scanning workflow
+        - Monitoring tools only available if data collection is needed
+        - Analysis tools only available after successful scanning operations
         """
-        return {
-            "get_disk_usage": self._get_disk_usage,
-            "get_recycle_bin_stats": self._get_recycle_bin_stats,
-            "check_directory_changes": self._check_directory_changes,
-            "scan_directory": self._scan_directory,
+
+        base_tools = {
             "select_random_unvisited_directory":
             self._select_random_unvisited_directory,
-            "analyse_directory": self._analyse_directory,
+            "scan_directory": self._scan_directory,
             "finish": self._finish,
         }
+        tools = {}
+        tools.update(base_tools)
+
+        # Add monitoring tools only if needed
+        # (check once in 30 minutes)
+        min_interval_secs = 1800
+        if self._needs_monitoring_data(min_interval_secs=min_interval_secs):
+            tools.update({
+                "get_disk_usage": self._get_disk_usage,
+                "get_recycle_bin_stats": self._get_recycle_bin_stats,
+                "check_directory_changes": self._check_directory_changes,
+            })
+
+        # Add analysis tools only if scanning occurred
+        if self._has_scan_results():
+            tools.update({
+                "analyse_directory": self._analyse_directory,
+            })
+
+        # Check and log the number of tolls used
+        num_tools = len(tools) if tools else 0
+        if len(tools) < 4:
+            logger.debug("Using base tools - optimal")
+        else:
+            logger.debug(f"Using {num_tools} tools")
+
+        return tools
+
+    def _has_scan_results(self) -> bool:
+        """
+        Helper function used to check if scanning has produced results for
+        analysis.
+        """
+        return bool(self.findings)
+
+    def _needs_monitoring_data(self, min_interval_secs: int) -> bool:
+        """
+        Helper function used to check if monitoring data is still needed.
+        """
+        return not hasattr(self, "_monitoring_data_collected") or \
+            time.time() - self._monitoring_data_collected > min_interval_secs
 
     async def _scan_directory(
             self,
