@@ -1,3 +1,5 @@
+from typing import Optional
+
 from agentic_fs_archaeologist.exceptions import BaseExceptionFSArchaeologist
 
 
@@ -43,11 +45,12 @@ class InvalidActionError(ReActLoopError):
     to use an invalid action/tool.
     """
 
-    def __init__(self, action: str, available_actions: list):
+    def __init__(self, action: Optional[str], available_actions: list):
         self.action = action
         self.available_actions = available_actions
 
-        invalid_action_str = f"Invalid action '{action}'"
+        action_str = action if action is not None else "None"
+        invalid_action_str = f"Invalid action '{action_str}'"
         available_actions_str = f"Available: {', '.join(available_actions)}"
         exception_message = f"{invalid_action_str}. {available_actions_str}"
 
